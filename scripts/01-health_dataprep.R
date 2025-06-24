@@ -114,19 +114,21 @@ ct_incidence_mortality <- read.csv("processed/ct_incidence_mortality.csv", strin
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### ASTHMA
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-dc20_sheet = 1
-ct_dc20 <- readxl::read_excel("data/population/Demographic_Raw_Tables.xlsx", sheet = dc20_sheet)%>%
-  mutate_at(vars(4:ncol(.)), ~ ./`Total:`)%>%
-  select(-`Total:`)
+# dc20_sheet = 1
+# ct_dc20 <- readxl::read_excel("data/population/Demographic_Raw_Tables.xlsx", sheet = dc20_sheet)%>%
+#   mutate_at(vars(4:ncol(.)), ~ ./`Total:`)%>%
+#   select(-`Total:`)
 
 ct_incidence_asthma <- read.csv("data/health/asthma/CDC_places/PLACES__Local_Data_for_Better_Health__Census_Tract_Data_2024_release_20250209.csv")%>%
   rename(FIPS = LocationName,
+         County = CountyName,
          incidence_rate = Data_Value,
-         pop = TotalPopulation)%>%
+         pop = TotalPopulation,
+         pop_over18 = TotalPop18plus)%>%
   filter(MeasureId == "CASTHMA")%>%
-  select(FIPS, pop, incidence_rate)%>%
-  right_join(ct_dc20, by = "FIPS")%>%
-  mutate(endpoint = "Asthma",
+  select(FIPS, pop, pop_over18, incidence_rate)%>%
+  mutate(pop_under18 = pop - pop_over18,
+         endpoint = "Asthma",
          incidence_rate = incidence_rate/100)
 
 write.csv(ct_incidence_asthma, file = "processed/ct_incidence_asthma.csv", row.names = FALSE)
