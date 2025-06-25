@@ -124,7 +124,7 @@ ct_mortality_relative <- ct_mortality %>%
          relative_mortality_pm10 = mortality_pm10 - baseline_mortality_pm10,
          relative_mortality_pm25 = mortality_pm25 - baseline_mortality_pm25,
          relative_mortality = mortality_pm - baseline_mortality_pm)%>%
-  select(scenario, FIPS, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality)
+  select(scenario, FIPS, County, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality)
 
 write.csv(ct_mortality_relative, file = "processed/ct_mortality_relative.csv", row.names = FALSE)
 
