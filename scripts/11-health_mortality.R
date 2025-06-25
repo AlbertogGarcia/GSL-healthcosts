@@ -33,7 +33,7 @@ options(java.parameters = "-Xmx8000m")
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 baseline_scenario = 1280
 
-relevant_scenarios <- seq(1275, 1281, by = 1)
+relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281)#seq(1275, 1281, by = 1)
 
 # Load and merge processed data #####################################
 
@@ -97,13 +97,16 @@ VSL_24 = 13.24189
 
 # total mortality by census tract
 ct_mortality <- ct_mortality_age %>%
-  group_by(scenario, FIPS) %>%
+  group_by(scenario, FIPS, County) %>%
   summarise(pm10 = mean(pm10, na.rm = T),
             pm25 = mean(pm25, na.rm = T),
             mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality_pm = sum(mortality_pm, na.rm = T))%>%
   ungroup
+
+write.csv(ct_mortality, file = "processed/ct_mortality.csv", row.names = FALSE)
+
 
 ct_mortality_relative <- ct_mortality %>%
   left_join(ct_mortality %>%
@@ -114,7 +117,7 @@ ct_mortality_relative <- ct_mortality %>%
                      baseline_mortality_pm25 = mortality_pm25,
                      baseline_mortality_pm = mortality_pm)%>%
               dplyr::select(-scenario)
-            , by = c("FIPS")
+            , by = c("FIPS", "County")
             )%>%
   mutate(relative_pm10 = pm10 - baseline_pm10,
          relative_pm25 = pm25 - baseline_pm25,
@@ -123,28 +126,11 @@ ct_mortality_relative <- ct_mortality %>%
          relative_mortality = mortality_pm - baseline_mortality_pm)%>%
   select(scenario, FIPS, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality)
 
-income_sheet = 4
+write.csv(ct_mortality_relative, file = "processed/ct_mortality_relative.csv", row.names = FALSE)
 
-ct_mortality_relative_income <- ct_mortality_relative %>%
-  left_join(
-    readxl::read_excel("data/population/Demographic_Raw_Tables.xlsx", sheet = income_sheet)
-    , by = "FIPS"
-    )%>%
-  mutate(median_HHI = as.numeric(`Median household income (dollars)`),
-         median_MHHI = median(median_HHI, na.rm = T),
-         above_median_HHI = as.character(ifelse(median_HHI >= median_MHHI, 1, 0)))
-
-# ct_mortality_relative %>%
-#   filter(scenario == 1277)%>%
-#   mutate(qrelative_pm10 = percent_rank(relative_pm10),
-#          qrelative_mortality = percent_rank(relative_mortality))%>%
-#   ggplot(aes(x = qrelative_pm10, y = qrelative_mortality#, color = as.character(scenario)
-#   )
-#          )+
-#   geom_point(shape = 21)+
-#   theme_bw()
-
-# total overall mortality
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Total overall mortality
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 total_mortality <- ct_mortality_age %>%
   group_by(scenario) %>%
   summarise(pm10 = mean(pm10, na.rm = T),
@@ -169,7 +155,8 @@ total_mortality_relative <- total_mortality %>%
          relative_mortality_pm10 = mortality_pm10 - baseline_mortality_pm10,
          relative_mortality_pm25 = mortality_pm25 - baseline_mortality_pm25,
          relative_mortality = mortality_pm - baseline_mortality_pm)%>%
-  select(scenario, pm10, pm25, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality)
+  select(scenario, pm10, pm25, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality)%>%
+  mutate(costs = VSL_24*relative_mortality)
 
 ggplot(total_mortality_relative
        , aes(x=scenario, y=relative_mortality))+
@@ -182,12 +169,74 @@ ggplot(total_mortality_relative
                         breaks = seq(-300, 200, by = 100))
   )+
   scale_x_reverse(name = "Great Salt Lake water level (mASL)",
-                  breaks = seq(1275, 1282, by = 1)
+                  breaks = relevant_scenarios
                   )+
   theme_cowplot()
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Mortality by County
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+county_mortality <- ct_mortality_age %>%
+  group_by(scenario, County) %>%
+  summarise(pm10 = mean(pm10, na.rm = T),
+            pm25 = mean(pm25, na.rm = T),
+            mortality_pm10 = sum(mortality_pm10, na.rm = T),
+            mortality_pm25 = sum(mortality_pm25, na.rm = T),
+            mortality_pm = sum(mortality_pm, na.rm = T))%>%
+  ungroup
 
-# mortality by age group
+county_mortality_relative <- county_mortality %>%
+  left_join(county_mortality %>%
+          filter(scenario == baseline_scenario)%>%
+          rename(baseline_pm10 = pm10,
+                 baseline_pm25 = pm25,
+                 baseline_mortality_pm10 = mortality_pm10,
+                 baseline_mortality_pm25 = mortality_pm25,
+                 baseline_mortality_pm = mortality_pm)%>%
+          dplyr::select(-scenario)
+                        , by = "County"
+                        )%>%
+  mutate(relative_pm10 = pm10 - baseline_pm10,
+         relative_pm25 = pm25 - baseline_pm25,
+         relative_mortality_pm10 = mortality_pm10 - baseline_mortality_pm10,
+         relative_mortality_pm25 = mortality_pm25 - baseline_mortality_pm25,
+         relative_mortality = mortality_pm - baseline_mortality_pm)%>%
+  select(scenario, County, pm10, pm25, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality)%>%
+  mutate(costs = VSL_24*relative_mortality)
+
+ggplot(county_mortality_relative
+       , aes(x=scenario, y=relative_mortality, fill = County))+
+  geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), fill = NA, color = "grey30")+
+  geom_bar(stat='identity')+
+  scale_y_continuous(
+    "Expected additional mortality\n(relative to 1280 mASL)", 
+    sec.axis = sec_axis(~ . * VSL_24, 
+                        name = "Expected costs (millions USD)",
+                        breaks = seq(-300, 200, by = 100))
+  )+
+  scale_x_reverse(name = "Great Salt Lake water level (mASL)",
+                  breaks = relevant_scenarios
+  )+
+  theme_cowplot()
+
+county_mortality_relative %>% 
+  filter(scenario != baseline_scenario, relative_mortality > 0)%>%
+  mutate(proportion_of_burden = relative_mortality/sum(relative_mortality))%>%
+  group_by(County) %>% 
+  summarise(proportion_of_burden = mean(proportion_of_burden))%>%
+  ggplot(aes(x=reorder(County, - proportion_of_burden), y=proportion_of_burden))+
+  geom_bar(stat='identity')+
+  ggtitle("Distribution of mortality across counties")+
+  scale_y_continuous(label = scales::percent, 
+                   #  breaks = seq(from = 0.05, to = .3, by = 0.05),
+                     name = "Percent of total expected mortality")+
+  theme_cowplot()+
+  theme(axis.title.x=element_blank())
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Mortality by age group
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 mortality_age <- ct_mortality_age %>%
   group_by(scenario, age_group, lower_age, upper_age) %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
@@ -214,18 +263,23 @@ mortality_age_relative <- mortality_age %>%
          proportion_of_burden = relative_mortality/sum(relative_mortality))%>%
   ungroup
 
-ggplot(mortality_age_relative %>% filter(scenario == 1277)
-       , aes(x=reorder(age_group, lower_age), y=proportion_of_burden))+
+mortality_age_relative %>% 
+  filter(scenario != baseline_scenario)%>%
+  group_by(age_group, lower_age, upper_age) %>% 
+  summarise(proportion_of_burden = mean(proportion_of_burden))%>%
+  ggplot(aes(x=reorder(age_group, lower_age), y=proportion_of_burden))+
   geom_bar(stat='identity')+
   ggtitle("Distribution of mortality across age")+
   scale_y_continuous(label = scales::percent, 
                      breaks = seq(from = 0.05, to = .3, by = 0.05),
-                     name = "Percent of total mortality")+
+                     name = "Percent of total expected mortality")+
   theme_cowplot()+
   theme(axis.title.x=element_blank())
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Mortality by race
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-# Mortality by race
 mortality_race <- ct_mortality_agebyrace %>%
   group_by(scenario, race) %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
@@ -272,7 +326,7 @@ ggplot(mortality_race_relative %>% filter(scenario <= baseline_scenario)
   # ggtitle("Distribution of mortality risk across race")+
   scale_y_continuous(#breaks = seq(from = 0.05, to = .3, by = 0.05),
     name = paste("Additional mortality per 100 thousand people\n(relative to", baseline_scenario, "mASL)"))+
-  scale_x_reverse(breaks = seq(from = 1275, to = 1282, by = 1),
+  scale_x_reverse(breaks = relevant_scenarios,
     name = "Great Salt Lake water level (mASL)")+
   theme_bw()+
   theme(panel.grid.minor = element_blank(),
