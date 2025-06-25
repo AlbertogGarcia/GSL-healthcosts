@@ -33,7 +33,7 @@ options(java.parameters = "-Xmx8000m")
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 baseline_scenario = 1280
 
-relevant_scenarios <- seq(1275, 1282, by = 1)#c(1275, 1277, 1279, 1280, 1281)
+relevant_scenarios <- seq(1275, 1281, by = 1)
 
 # Load and merge processed data #####################################
 
@@ -266,12 +266,12 @@ ggplot(mortality_race_relative %>% filter(scenario == 1277)
   theme_cowplot()+
   theme(axis.title.x=element_blank())
 
-ggplot(mortality_race_relative
+ggplot(mortality_race_relative %>% filter(scenario <= baseline_scenario)
        , aes(x=scenario, color = race, y=mortality_per_hundredk))+
   geom_line()+
   # ggtitle("Distribution of mortality risk across race")+
   scale_y_continuous(#breaks = seq(from = 0.05, to = .3, by = 0.05),
-    name = "Mortality per 100 thousand people")+
+    name = paste("Additional mortality per 100 thousand people\n(relative to", baseline_scenario, "mASL)"))+
   scale_x_reverse(breaks = seq(from = 1275, to = 1282, by = 1),
     name = "Great Salt Lake water level (mASL)")+
   theme_bw()+
