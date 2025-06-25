@@ -1,6 +1,6 @@
-# GSL dust costs: Mortality impacts data processing
+# GSL dust costs: Mortality and asthma data processing
 # albert.garcia@utah.edu
-# created: 05/28/2025
+# created: 06/20/2025
 # updated: 
 
 # Set up environment ########################################
@@ -33,7 +33,6 @@ options(java.parameters = "-Xmx8000m")
 # census-tract population demographics (by age)
 
 age_sheet = 3
-agebyrace_sheet = 11
 ct_ACS_age_wide <- readxl::read_excel("data/population/Demographic_Raw_Tables.xlsx", sheet = age_sheet)
 
 ct_ACS_age <- ct_ACS_age_wide %>%
@@ -53,12 +52,6 @@ ct_ACS_age <- ct_ACS_age_wide %>%
          upper_age = ifelse(upper_age==5,4,upper_age) ## What it actually should be (under 5 year old)
   )
   
-  
-
-# now age-by-race
-ct_ACS_agebyrace <- readxl::read_excel("data/population/Demographic_Raw_Tables.xlsx", sheet = agebyrace_sheet)
-
-
 # get county by age population totals
 county_age_pop_ACS <- ct_ACS_age %>%
   group_by(County, lower_age, upper_age)%>%
