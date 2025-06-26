@@ -40,7 +40,7 @@ VSLY_24 = 0.5372393
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 baseline_scenario = 1280
 
-relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281)#seq(1275, 1281, by = 1)
+relevant_scenarios <- seq(1275, 1281, by = 1)
 
 # Load and merge processed data #####################################
 
@@ -201,7 +201,8 @@ ggplot(total_mortality_relative
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 county_mortality <- ct_mortality_age %>%
   group_by(scenario, County) %>%
-  summarise(pm10 = mean(pm10, na.rm = T),
+  summarise(pop = sum(pop, na.rm = T),
+            pm10 = mean(pm10, na.rm = T),
             pm25 = mean(pm25, na.rm = T),
             mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
@@ -220,7 +221,7 @@ county_mortality_relative <- county_mortality %>%
                  baseline_mortality_pm = mortality_pm,
                  baseline_costs_VSL = costs_VSL,
                  baseline_costs_VSLY = costs_VSLY)%>%
-          dplyr::select(-scenario)
+          dplyr::select(-c(scenario, pop))
                         , by = "County"
                         )%>%
   mutate(relative_pm10 = pm10 - baseline_pm10,
@@ -230,7 +231,7 @@ county_mortality_relative <- county_mortality %>%
          relative_mortality = mortality_pm - baseline_mortality_pm,
          relative_costs_VSL = costs_VSL - baseline_costs_VSL,
          relative_costs_VSLY = costs_VSLY - baseline_costs_VSLY)%>%
-  select(scenario, County, pm10, pm25, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality, relative_costs_VSL, relative_costs_VSLY)
+  select(scenario, County, pop, pm10, pm25, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality, relative_costs_VSL, relative_costs_VSLY)
 
 ggplot(county_mortality_relative
        , aes(x=scenario, y=relative_mortality, fill = County))+
@@ -258,6 +259,20 @@ county_mortality_relative %>%
   scale_y_continuous(label = scales::percent, 
                    #  breaks = seq(from = 0.05, to = .3, by = 0.05),
                      name = "Percent of total expected mortality")+
+  theme_cowplot()+
+  theme(axis.title.x=element_blank())
+
+county_mortality_relative %>% 
+  filter(scenario != baseline_scenario, relative_mortality > 0)%>%
+  mutate(mortality_per_hundredk = relative_mortality/pop*100000)%>%
+  group_by(County) %>% 
+  summarise(mortality_per_hundredk = mean(mortality_per_hundredk))%>%
+  ggplot(aes(x=reorder(County, - mortality_per_hundredk), y=mortality_per_hundredk))+
+  geom_bar(stat='identity')+
+  ggtitle("Mortality risk across counties")+
+  scale_y_continuous(label = scales::percent, 
+                     #  breaks = seq(from = 0.05, to = .3, by = 0.05),
+                     name = "Expected mortality per 100,000 residents")+
   theme_cowplot()+
   theme(axis.title.x=element_blank())
 
@@ -307,6 +322,17 @@ mortality_age_relative %>%
   scale_y_continuous(label = scales::percent, 
                      breaks = seq(from = 0.05, to = .3, by = 0.05),
                      name = "Percent of total expected mortality")+
+  theme_cowplot()+
+  theme(axis.title.x=element_blank())
+
+mortality_age_relative %>% 
+  filter(scenario != baseline_scenario)%>%
+  group_by(age_group, lower_age, upper_age) %>% 
+  summarise(mortality_per_hundredk = mean(mortality_per_hundredk))%>%
+  ggplot(aes(x=reorder(age_group, lower_age), y=mortality_per_hundredk))+
+  geom_bar(stat='identity')+
+  ggtitle("Distribution of mortality risk across age")+
+  scale_y_continuous(name = "Expected mortality per 100,000 residents")+
   theme_cowplot()+
   theme(axis.title.x=element_blank())
 
@@ -366,3 +392,15 @@ ggplot(mortality_race_relative %>% filter(scenario <= baseline_scenario)
   theme(panel.grid.minor = element_blank(),
         legend.title = element_blank())
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Mortality by income
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+income_sheet = 4
+ct_ACS_income <- readxl::read_excel("data/population/Demographic_Raw_Tables.xlsx", sheet = income_sheet)
+
+ct_mortality_income <- ct_mortality_age %>%
+  left_join(ct_ACS_income, by = "FIPS")%>%
+  mutate(median_ct_HHI = median(as.numeric(`Median household income (dollars)`), na.rm = T),
+         above_median_ct_HHI = ifelse(`Median household income (dollars)` >= median_ct_HHI, 1, 0))
