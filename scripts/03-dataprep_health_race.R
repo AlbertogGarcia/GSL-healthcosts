@@ -78,7 +78,7 @@ county_incidence_agebyrace1yr <- read.delim("data/health/mortality/CDC_wonder/20
          race = ifelse(Hispanic.Origin == "Hispanic or Latino", Hispanic.Origin, race),
          County = str_remove(County, " County, UT"))%>%
   filter(Notes != "Total",
-         County %in% county_pop$County
+         County %in% county_agebyrace_pop_ACS$County
   )%>%
   full_join(county_agebyrace_pop_ACS, by = c("County", "race"), relationship = "many-to-many")%>%
   filter(as.numeric(age) <= upper_age & as.numeric(age) >= lower_age)%>%

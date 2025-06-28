@@ -313,7 +313,7 @@ mortality_age_relative <- mortality_age %>%
   ungroup
 
 mortality_age_relative %>% 
-  filter(scenario != baseline_scenario)%>%
+  filter(scenario < baseline_scenario)%>%
   group_by(age_group, lower_age, upper_age) %>% 
   summarise(proportion_of_burden = mean(proportion_of_burden))%>%
   ggplot(aes(x=reorder(age_group, lower_age), y=proportion_of_burden))+
@@ -345,7 +345,9 @@ mortality_race <- ct_mortality_agebyrace %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality_pm = sum(mortality_pm, na.rm = T),
-            pop = sum(pop, na.rm = T))%>%
+            pop = sum(pop, na.rm = T),
+            costs_VSL = sum(costs_VSL, na.rm = T),
+            costs_VSLY = sum(costs_VSLY, na.rm = T))%>%
   ungroup
 
 
@@ -354,14 +356,18 @@ mortality_race_relative <- mortality_race %>%
               filter(scenario == baseline_scenario)%>%
               rename(baseline_mortality_pm10 = mortality_pm10,
                      baseline_mortality_pm25 = mortality_pm25,
-                     baseline_mortality_pm = mortality_pm)%>%
+                     baseline_mortality_pm = mortality_pm,
+                     baseline_costs_VSL = costs_VSL,
+                     baseline_costs_VSLY = costs_VSLY)%>%
               dplyr::select(-c(scenario, pop))
             , by = c("race")
   )%>%
   mutate(relative_mortality_pm10 = mortality_pm10 - baseline_mortality_pm10,
          relative_mortality_pm25 = mortality_pm25 - baseline_mortality_pm25,
-         relative_mortality = mortality_pm - baseline_mortality_pm)%>%
-  select(scenario, race, pop, relative_mortality_pm10, relative_mortality_pm25, relative_mortality)%>%
+         relative_mortality = mortality_pm - baseline_mortality_pm,
+         relative_costs_VSL = costs_VSL - baseline_costs_VSL,
+         relative_costs_VSLY = costs_VSLY - baseline_costs_VSLY)%>%
+  select(scenario, race, pop, relative_mortality_pm10, relative_mortality_pm25, relative_mortality, relative_costs_VSL, relative_costs_VSLY)%>%
   group_by(scenario)%>%
   mutate(mortality_per_hundredk = relative_mortality/pop*100000,
          proportion_of_burden = relative_mortality/sum(relative_mortality))%>%
@@ -370,6 +376,15 @@ mortality_race_relative <- mortality_race %>%
     "Asian alone", "White NH", "Hispanic or Latino", "Black or African American Alone", "Hawaiian and PI Alone"
   )
          )
+
+ggplot(mortality_race_relative %>% filter(scenario == 1277)
+       , aes(x=reorder(race, relative_costs_VSL), y=relative_costs_VSL))+
+  geom_bar(stat='identity')+
+  ggtitle("Distribution of total mortality costs across race")+
+  scale_y_continuous(#breaks = seq(from = 0.05, to = .3, by = 0.05),
+    name = "Total mortality costs (millions USD)")+
+  theme_cowplot()+
+  theme(axis.title.x=element_blank())
 
 ggplot(mortality_race_relative %>% filter(scenario == 1277)
        , aes(x=reorder(race, mortality_per_hundredk), y=mortality_per_hundredk))+
