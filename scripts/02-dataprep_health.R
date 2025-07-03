@@ -80,7 +80,7 @@ county_incidence_age1yr_2020 <- read.delim("data/health/mortality/CDC_wonder/202
   filter(age != "NS")%>%
   mutate(County = str_remove(County, " County, UT"))%>%
   filter(Notes != "Total",
-         County %in% county_pop$County
+         County %in% county_age_pop_ACS$County
   )%>%
   full_join(county_age_pop_ACS, by = c("County"), relationship = "many-to-many")%>%
   filter(as.numeric(age) <= upper_age & as.numeric(age) >= lower_age)%>%
