@@ -30,11 +30,16 @@ CPI_0024 <- CPI_2024/CPI_2000
 income_elasticity = 0.4
 
 age_vsl_data <- read.csv("data/health/mortality/Aldy_Viscusi_2008_Fig1Data.csv", stringsAsFactors = F)%>%
-  mutate(age_vsl_2000 = vslcohort3,
-         age_min  = ifelse(age > 18,age,0), 
-         age_max = ifelse(age<62,age,100))%>%
-  select(age_min,age_max,age_vsl_2000)%>%
-  mutate(year=2024)
+  mutate(age_vsl_2000 = vslcohort3)%>%
+  select(age, age_vsl_2000)%>%
+  right_join(
+    data.frame(age = seq(from = 0, 100, by = 1))
+  )%>%
+  mutate(age_vsl_2000 = case_when(age < 18 ~ 3.388772,
+                                  age > 62 ~ 5.091287,
+                                  age >= 18 & age <= 62 ~ age_vsl_2000
+  ),
+         year=2024)
 
 ## Load real GDP per cap growth rates
 
@@ -55,20 +60,29 @@ growth_0024 <- gdp_growth %>%
 
 ## Combine
 
-age_vsl_2024 <- age_vsl_data%>%
+age_vsl_2024 <- age_vsl_data %>%
   mutate(age_vsl_2024 = age_vsl_2000*CPI_0024*growth_0024^income_elasticity)
 
 age_vsl_2024 %>%
+  filter(age >= 18 & age <= 62) %>%
   summarise(age_vsl_2024 = mean(age_vsl_2024))
 
+
+
 age_vsl_2024 %>%
-  mutate(age_min = ifelse(age_min == 0, 18, age_min))%>%
-  ggplot(aes(x=age_min, y = age_vsl_2024))+
+  mutate(vsl_24 = 12.57222) %>%# EPA VSL - non-age-varying
+  pivot_longer(cols = c("age_vsl_2024", "vsl_24"), values_to = "VSL", names_to = "method")%>%
+  filter((age >= 18 & age <= 62) | method == "vsl_24") %>%
+  ggplot(aes(x=age, y = VSL, color = method))+
   geom_point(size = 0.75)+
   geom_line()+
   theme_classic(16)+
-  labs(x= "Age", y = "2024 Cohort-Adjusted VSL (million 2024 $) from Aldy & Viscusi (2008)")
+  theme(legend.title = element_blank())+
+  scale_color_manual(labels = c("Cohort-adjusted\n(Aldy & Viscusi 2008)", "EPA-recommended"),
+                     values = c("red", "blue")
+                     )+
+  labs(x= "Age", y = "VSL (million 2024 $)")
 
 age_vsl_2024 %>%
-  select(age_min, age_max,year,age_vsl_2024) %>%
-  write.csv("processed/age_based_VSL_2019.csv", row.names = F)
+  select(age, year ,age_vsl_2024) %>%
+  write.csv("processed/age_based_VSL_2024.csv", row.names = F)

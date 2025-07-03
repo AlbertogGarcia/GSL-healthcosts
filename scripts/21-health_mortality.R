@@ -29,9 +29,12 @@ options(java.parameters = "-Xmx8000m")
 `%ni%` <- Negate(`%in%`)  # "not in" function
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### VSL and VSLY
+#### VSL and age-based VSL
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 VSL_24 = 12.57222
+
+age_based_VSL_2024 <- read.csv("processed/age_based_VSL_2024.csv")%>%
+  select(age, age_vsl_2024)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### SET BASELINE LAKE SCENARIO
@@ -49,17 +52,28 @@ scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas.csv", stringsAsFact
 #2 Population and incidence
 ct_incidence_mortality <- read.csv("processed/ct_incidence_mortality.csv", stringsAsFactors =  FALSE)
 
+age_VSL_2024_grouped <- ct_incidence_mortality %>%
+  select(lower_age, upper_age, age_group) %>%
+  distinct()%>%
+  tidyr::crossing(age_based_VSL_2024)%>%
+  filter(age >= lower_age & age <= upper_age)%>%
+  group_by(lower_age, upper_age, age_group) %>%
+  summarise(age_vsl_2024 = mean(age_vsl_2024))
+
+
 # Same but disaggregated by race
 ct_incidence_mortality_race <- read.csv("processed/ct_incidence_mortality_race.csv", stringsAsFactors =  FALSE)
 
 
 #Merge w/ pollution deltas 
 ct_mortality_pollution <- ct_incidence_mortality %>%
-  left_join(scenario_pm_deltas, by = "FIPS")
+  left_join(scenario_pm_deltas, by = "FIPS")%>%
+  left_join(age_VSL_2024_grouped, by = c("lower_age", "upper_age", "age_group"))
 
 #Merge w/ pollution deltas 
 ct_mortality_pollution_race <- ct_incidence_mortality_race %>%
-  left_join(scenario_pm_deltas, by = "FIPS")
+  left_join(scenario_pm_deltas, by = "FIPS")%>%
+  left_join(age_VSL_2024_grouped, by = c("lower_age", "upper_age", "age_group"))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Mortality impacts
@@ -81,7 +95,8 @@ ct_mortality_age <- ct_mortality_pollution %>%
          mortality_pm25 = (1-(1/exp(beta_pm25*exposure_pm25)))*incidence_rate*pop,
          mortality_pm = mortality_pm10 + mortality_pm25,
          life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
-         costs_VSL = mortality_pm*VSL_24)%>%
+         costs_VSL = mortality_pm*VSL_24,
+         costs_age_VSL = mortality_pm*age_vsl_2024)%>%
   drop_na(scenario)
 
 #Mortality impact
@@ -92,7 +107,8 @@ ct_mortality_agebyrace <- ct_mortality_pollution_race %>%
          mortality_pm25 = (1-(1/exp(beta_pm25*exposure_pm25)))*incidence_rate*pop,
          mortality_pm = mortality_pm10 + mortality_pm25,
          life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
-         costs_VSL = mortality_pm*VSL_24
+         costs_VSL = mortality_pm*VSL_24,
+         costs_age_VSL = mortality_pm*age_vsl_2024
          )%>%
   drop_na(scenario)
 
@@ -110,7 +126,8 @@ ct_mortality <- ct_mortality_age %>%
             mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality_pm = sum(mortality_pm, na.rm = T),
-            costs_VSL = sum(costs_VSL, na.rm = T))%>%
+            costs_VSL = sum(costs_VSL, na.rm = T),
+            costs_age_VSL = sum(costs_age_VSL, na.rm = T))%>%
   ungroup
 
 write.csv(ct_mortality, file = "processed/ct_mortality.csv", row.names = FALSE)
@@ -124,7 +141,8 @@ ct_mortality_relative <- ct_mortality %>%
                      baseline_mortality_pm10 = mortality_pm10,
                      baseline_mortality_pm25 = mortality_pm25,
                      baseline_mortality_pm = mortality_pm,
-                     baseline_costs_VSL = costs_VSL)%>%
+                     baseline_costs_VSL = costs_VSL,
+                     baseline_costs_age_VSL = costs_age_VSL)%>%
               dplyr::select(-scenario)
             , by = c("FIPS", "County")
             )%>%
@@ -133,8 +151,9 @@ ct_mortality_relative <- ct_mortality %>%
          relative_mortality_pm10 = mortality_pm10 - baseline_mortality_pm10,
          relative_mortality_pm25 = mortality_pm25 - baseline_mortality_pm25,
          relative_mortality = mortality_pm - baseline_mortality_pm,
-         relative_costs_VSL = costs_VSL - baseline_costs_VSL)%>%
-  select(scenario, FIPS, County, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality, relative_costs_VSL)
+         relative_costs_VSL = costs_VSL - baseline_costs_VSL,
+         relative_costs_age_VSL = costs_age_VSL - baseline_costs_age_VSL)%>%
+  select(scenario, FIPS, County, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality, relative_costs_VSL, relative_costs_age_VSL)
 
 write.csv(ct_mortality_relative, file = "processed/ct_mortality_relative.csv", row.names = FALSE)
 
@@ -148,7 +167,8 @@ total_mortality <- ct_mortality_age %>%
             mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality_pm = sum(mortality_pm, na.rm = T),
-            costs_VSL = sum(costs_VSL, na.rm = T)
+            costs_VSL = sum(costs_VSL, na.rm = T),
+            costs_age_VSL = sum(costs_age_VSL, na.rm = T)
             )%>%
   ungroup
 
@@ -160,7 +180,8 @@ total_mortality_relative <- total_mortality %>%
                      baseline_mortality_pm10 = mortality_pm10,
                      baseline_mortality_pm25 = mortality_pm25,
                      baseline_mortality_pm = mortality_pm,
-                     baseline_costs_VSL = costs_VSL
+                     baseline_costs_VSL = costs_VSL,
+                     baseline_costs_age_VSL = costs_age_VSL
                      )%>%
               dplyr::select(-scenario)
   )%>%
@@ -169,9 +190,10 @@ total_mortality_relative <- total_mortality %>%
          relative_mortality_pm10 = mortality_pm10 - baseline_mortality_pm10,
          relative_mortality_pm25 = mortality_pm25 - baseline_mortality_pm25,
          relative_mortality = mortality_pm - baseline_mortality_pm,
-         relative_costs_VSL = costs_VSL - baseline_costs_VSL
+         relative_costs_VSL = costs_VSL - baseline_costs_VSL,
+         relative_costs_age_VSL = costs_age_VSL - baseline_costs_age_VSL
          )%>%
-  select(scenario, pm10, pm25, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality, relative_costs_VSL)
+  select(scenario, pm10, pm25, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality, relative_costs_VSL, relative_costs_age_VSL)
 
 ggplot(total_mortality_relative
        , aes(x=scenario, y=relative_mortality))+
