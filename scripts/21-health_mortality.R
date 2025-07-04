@@ -5,9 +5,6 @@
 
 # Set up environment ########################################
 
-# packages=c("xlsx", "gdata", "dplyr","tidyr", "stringr", "fuzzyjoin", "stringr", 
-#            "ggplot2", "stargazer", "plm", "cowplot", "sf", "lwgeom","data.table")
-
 # load or install necessary libraries. 
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(mapview,  # view spatial data in viewer
@@ -28,6 +25,32 @@ options(dplyr.summarise.inform = FALSE)  # turn off dplyr group by comments
 options(java.parameters = "-Xmx8000m") 
 `%ni%` <- Negate(`%in%`)  # "not in" function
 
+# Color palette
+palette <- list("white" = "#FAFAFA",
+                "light_grey" = "#d9d9d9",
+                "grey" = "grey50",
+                "dark" = "#0c2230",
+                "red" = "#d7191c",
+                "blue" = "#2c7bb6",
+                "purple" = "#880ED4",
+                "sc1275" = "#d7191c",
+                "sc1277" = "#fdae61",
+                # "sc1278" = "#ffd92f", # "#fee090"
+                "sc1280" = "#abd9e9",
+                "sc1281" = "#2c7bb6"
+)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### SET BASELINE LAKE SCENARIO
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+baseline_scenario = 1278
+
+relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281)
+
+scenario_pal <- c(palette$sc1275, palette$sc1277, palette$dark, palette$sc1280, palette$sc1281)
+
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### VSL and age-based VSL
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -35,13 +58,6 @@ VSL_24 = 12.57222
 
 age_based_VSL_2024 <- read.csv("processed/age_based_VSL_2024.csv")%>%
   select(age, age_vsl_2024)
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### SET BASELINE LAKE SCENARIO
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-baseline_scenario = 1280
-
-relevant_scenarios <- seq(1275, 1281, by = 1)
 
 # Load and merge processed data #####################################
 
@@ -196,19 +212,30 @@ total_mortality_relative <- total_mortality %>%
   select(scenario, pm10, pm25, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality, relative_costs_VSL, relative_costs_age_VSL)
 
 ggplot(total_mortality_relative
-       , aes(x=scenario, y=relative_mortality))+
-  geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), color = "grey30")+
+       , aes(x=reorder(scenario, scenario, order = T), y=relative_costs_VSL, fill = as.character(scenario))
+       )+
+  #geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), color = palette$dark)+
   geom_bar(stat='identity')+
+  geom_hline(yintercept = 0, linewidth = 0.25)+
   scale_y_continuous(
-    "Expected additional mortality\n(relative to 1280 mASL)", 
-    sec.axis = sec_axis(~ . * VSL_24, 
-                        name = "Expected costs (millions USD)",
-                        breaks = seq(-300, 200, by = 100))
+    "Expected costs (millions USD)\nrelative to 1278 mASL", 
+    sec.axis = sec_axis(~ . / VSL_24, 
+                        name = "Expected mortalities"
+                        , breaks = seq(-20, 15, by = 5)
+                        )
   )+
-  scale_x_reverse(name = "Great Salt Lake water level (mASL)",
-                  breaks = relevant_scenarios
-                  )+
-  theme_cowplot()
+  geom_text(aes(label=round(relative_costs_VSL, 2), y=relative_costs_VSL+abs(relative_mortality)*VSL_24/relative_mortality)
+            #, fontface='bold'
+            ) +
+  #xlab("GSL water level (mASL)")+
+  scale_fill_manual(values = scenario_pal, name = "GSL water level (mASL)")+
+  theme_cowplot(16)+
+  theme(legend.position = "top",
+        legend.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank())+
+  guides(fill = guide_legend(title.position="top", title.hjust = 0.5))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Mortality by County
@@ -244,21 +271,6 @@ county_mortality_relative <- county_mortality %>%
          relative_costs_VSL = costs_VSL - baseline_costs_VSL)%>%
   select(scenario, County, pop, pm10, pm25, relative_pm10, relative_pm25, relative_mortality_pm10, relative_mortality_pm25, relative_mortality, relative_costs_VSL)
 
-ggplot(county_mortality_relative
-       , aes(x=scenario, y=relative_mortality, fill = County))+
-  geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), fill = NA, color = "grey30")+
-  geom_bar(stat='identity')+
-  scale_y_continuous(
-    "Expected additional mortality\n(relative to 1280 mASL)", 
-    sec.axis = sec_axis(~ . * VSL_24, 
-                        name = "Expected costs (millions USD)",
-                        breaks = seq(-300, 200, by = 100))
-  )+
-  scale_x_reverse(name = "Great Salt Lake water level (mASL)",
-                  breaks = relevant_scenarios
-  )+
-  theme_cowplot()
-
 county_mortality_relative %>% 
   filter(scenario != baseline_scenario, relative_mortality > 0)%>%
   mutate(proportion_of_burden = relative_mortality/sum(relative_mortality))%>%
@@ -284,7 +296,7 @@ county_mortality_relative %>%
   scale_y_continuous(label = scales::percent, 
                      #  breaks = seq(from = 0.05, to = .3, by = 0.05),
                      name = "Expected mortality per 100,000 residents")+
-  theme_cowplot()+
+  theme_cowplot(16)+
   theme(axis.title.x=element_blank())
 
 

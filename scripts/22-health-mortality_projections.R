@@ -33,12 +33,31 @@ options(java.parameters = "-Xmx8000m")
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 VSL_24 = 12.57222
 
+
+# Color palette
+palette <- list("white" = "#FAFAFA",
+                "light_grey" = "#d9d9d9",
+                "grey" = "grey50",
+                "dark" = "#0c2230",
+                "red" = "#d7191c",
+                "blue" = "#2c7bb6",
+                "purple" = "#880ED4",
+                "sc1275" = "#d7191c",
+                "sc1277" = "#fdae61",
+               # "sc1278" = "#ffd92f", # "#fee090"
+                "sc1278" = "#abd9e9",
+                "sc1281" = "#2c7bb6"
+)
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### SET BASELINE LAKE SCENARIO
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 baseline_scenario = 1280
 
 relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281)
+
+scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1278, palette$sc1281)
+
 
 # Load and merge processed data #####################################
 
@@ -73,7 +92,6 @@ ct_mortality_projections <- ct_projections %>%
          mortality_pm10 = (1-(1/exp(beta_pm10*exposure_pm10)))*incidence_rate*pop,
          mortality_pm25 = (1-(1/exp(beta_pm25*exposure_pm25)))*incidence_rate*pop,
          mortality_pm = mortality_pm10 + mortality_pm25,
-         life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
          FV_costs_VSL = mortality_pm*VSL_24,
          PV_costs_VSL = FV_costs_VSL/(1+0.03)^(Year - 2024)
          )%>%
@@ -115,22 +133,27 @@ ggplot(total_mortality_projections_relative, aes(x = Year, y = relative_mortalit
   geom_line()+
   geom_point(size = 0.75)
 
-ggplot(total_mortality_projections_relative, aes(x = Year, y = cum_relative_mortality, color = as.character(scenario)))+
+total_mortality_projections_relative %>%
+  filter(scenario != baseline_scenario)%>%
+  ggplot(aes(x = Year, y = cum_relative_mortality, color = as.character(scenario)))+
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5)+
   geom_line()+
-  geom_point(size = 0.75)+
-  #geom_vline(xintercept = 2033, linetype = "dashed", linewidth = 0.2)+
+  geom_point(size = 0.9)+
   ylab("Cumulative premature mortalities") +
   ggtitle("Mortality through 2050 (relative to 1280 mASL)")+
-  scale_color_discrete(name = "GSL water level (mASL)")+
+  scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
   theme_classic()+
   theme(legend.position = "bottom")
 
-ggplot(total_mortality_projections_relative, aes(x = Year, y = PV_cum_relative_costs, color = as.character(scenario)))+
+total_mortality_projections_relative %>%
+  filter(scenario != baseline_scenario)%>%
+  ggplot(aes(x = Year, y = PV_cum_relative_costs, color = as.character(scenario)))+
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5)+
   geom_line()+
-  geom_point(size = 0.75)+
-  #geom_vline(xintercept = 2033, linetype = "dashed", linewidth = 0.2)+
+  geom_point(size = 0.9)+
   ylab("Present value of cumulative costs (millions USD)") +
   ggtitle("Costs through 2050 (relative to 1280 mASL)")+
-  scale_color_discrete(name = "GSL water level (mASL)")+
+  scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
   theme_classic()+
   theme(legend.position = "bottom")
+

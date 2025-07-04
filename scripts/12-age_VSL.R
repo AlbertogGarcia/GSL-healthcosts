@@ -70,16 +70,16 @@ age_vsl_2024 %>%
 
 
 age_vsl_2024 %>%
-  mutate(vsl_24 = 12.57222) %>%# EPA VSL - non-age-varying
-  pivot_longer(cols = c("age_vsl_2024", "vsl_24"), values_to = "VSL", names_to = "method")%>%
-  filter((age >= 18 & age <= 62) | method == "vsl_24") %>%
+  mutate(vsl_2024 = 12.57222) %>%# EPA VSL - non-age-varying
+  pivot_longer(cols = c("vsl_2024", "age_vsl_2024"), values_to = "VSL", names_to = "method")%>%
+  filter((age >= 18 & age <= 62) | (method == "vsl_2024" & age <= 80)) %>%
   ggplot(aes(x=age, y = VSL, color = method))+
-  geom_point(size = 0.75)+
-  geom_line()+
+  geom_line(linewidth = 1.25)+
   theme_classic(16)+
-  theme(legend.title = element_blank())+
+  theme(legend.title = element_blank(),
+        legend.position = "bottom")+
   scale_color_manual(labels = c("Cohort-adjusted\n(Aldy & Viscusi 2008)", "EPA-recommended"),
-                     values = c("red", "blue")
+                     values = c("#A23B72", "#2E86AB")
                      )+
   labs(x= "Age", y = "VSL (million 2024 $)")
 
