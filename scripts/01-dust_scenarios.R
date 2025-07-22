@@ -33,11 +33,24 @@ scenarios <- do.call(rbind , tables)%>%
   mutate(scenario = str_sub(id,-32,-29))%>%
   select(-c(id, X))%>%
   select(scenario, everything())%>%
-  pivot_longer(2:ncol(.), names_to = "centroid_name", values_to = "pm10")%>%
+  pivot_longer(2:ncol(.), names_to = "centroid_name", values_to = "pm25")%>%
   group_by(scenario, centroid_name)%>%
-  summarise(pm10 = mean(pm10))%>%
+  summarise(pm25 = mean(pm25))%>%
   ungroup%>%
-  mutate(pm25 = pm10*0.176)
+  mutate(pm10 = pm25*9)# Assumes pm10 makes up 90% of the total mass and pm2.5 10%
+#0.176
+
+scenarios_daily <- do.call(rbind , tables)%>%
+  mutate(scenario = str_sub(id,-32,-29),
+         d = str_sub(X,7,8),
+         md = str_sub(X,5,8))%>%
+  select(-c(id, X))%>%
+  select(scenario, d, md, everything())%>%
+  pivot_longer(4:ncol(.), names_to = "centroid_name", values_to = "pm25")%>%
+  group_by(scenario, d, md, centroid_name)%>%
+  summarise(pm25 = mean(pm25))%>%
+  ungroup%>%
+  mutate(pm10 = pm25*9)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Match centroids back to "real" census tracts
@@ -59,18 +72,10 @@ ct_centroids <- st_as_sf(centroid_location, coords = c("lon", "lat"),
 scenarios <- scenarios %>%
   right_join(ct_centroids, by = "centroid_name")
 
-
 write.csv(scenarios, file = "processed/scenario_pm_deltas.csv", row.names = FALSE)
 
 
-# Make sure the same as Austin's calculations
+scenarios_daily <- scenarios_daily %>%
+  right_join(ct_centroids, by = "centroid_name")
 
-my_test <- scenarios %>%
-  group_by(scenario)%>%
-  summarise(my_pm10_conc = mean(pm10))
-  
-test <- read.csv("data/dust/centroid_locations/2020CensusTract_TableToExcel.csv")%>%
-  summarise_at(vars(gsl_1275_0_mASL_centroid:gsl_1282_0_mASL_centroid), ~mean(.))%>%
-  pivot_longer(cols = gsl_1275_0_mASL_centroid:gsl_1282_0_mASL_centroid, names_to = "scenario", values_to = "pm10_conc")%>%
-  mutate(scenario = str_sub(scenario, 5, 8))%>%
-  full_join(my_test, by = c("scenario"))
+write.csv(scenarios_daily, file = "processed/scenario_pm_deltas_daily.csv", row.names = FALSE)
