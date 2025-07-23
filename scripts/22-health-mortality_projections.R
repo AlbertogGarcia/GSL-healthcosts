@@ -154,20 +154,20 @@ total_mortality_projections %>%
   geom_line()+
   geom_point(size = 1)+
   ylab("Cumulative premature mortalities") +
-  ggtitle("Cumulative mortality through 2060")+
+  ggtitle("Cumulative premature mortality through 2060")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
   theme_classic()+
   theme(legend.position = "bottom")
 
 total_mortality_projections %>%
   ggplot(aes(x = Year, y = PV_cum_costs, color = as.character(scenario)))+
-  geom_hline(yintercept = 1000, linetype = "dashed", linewidth = 0.5)+
+  #geom_hline(yintercept = 1000, linetype = "dashed", linewidth = 0.5)+
   geom_line()+
   geom_point(size = 0.9)+
   scale_y_continuous(name = "Present value of cumulative costs (millions USD)",
-                     limits = c(0, 2000),
-                     breaks = seq(0, 2000, by = 250)) +
-  ggtitle("Present value of costs through 2060")+
+                     limits = c(0, 1800),
+                     breaks = seq(0, 1750, by = 250)) +
+  ggtitle("Present value of cumulative costs through 2060")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
   theme_classic()+
   theme(legend.position = "bottom")
