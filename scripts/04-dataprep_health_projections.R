@@ -23,6 +23,23 @@ options(dplyr.summarise.inform = FALSE)  # turn off dplyr group by comments
 options(java.parameters = "-Xmx8000m") 
 `%ni%` <- Negate(`%in%`)  # "not in" function
 
+# Color palette
+palette <- list("white" = "#FAFAFA",
+                "dark" = "#0c2230",
+                "red" = "#d7191c",
+                "blue" = "#2c7bb6",
+                "orange" = "#fc8d62",
+                "green" = "#66c2a5",
+                "purple" = "#8da0cb",
+                "sc1275" = "#d7191c",
+                "sc1277" = "#fdae61",
+                "sc1278" = 
+                  "grey50", 
+                #"#ffd93f", 
+                "sc1280" = "#abd9e9",
+                "sc1281" = "#2c7bb6"
+)
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### MORTALITY
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -56,14 +73,20 @@ gardner_pop_projections %>%
   select(Year, "Under 18", "18 to 64", "Over 65")%>%
   pivot_longer(2:4, , names_to = "age_group", values_to = "pop")%>%
   filter(Year >= ACS_year_final)%>%
-  group_by(age_group, Year)%>%
+  mutate(lower_age = case_when(
+    age_group == "Under 18" ~ 0,
+    age_group == "18 to 64" ~ 18,
+    age_group == "Over 65" ~ 65
+  ))%>%
+  group_by(age_group, lower_age, Year)%>%
   summarise(pop = sum(pop, na.rm = T))%>%
   mutate(growth_rate = ifelse(Year == ACS_year_final, 0, (pop/lag(pop))-1),
          cum_growth = cumprod(1 + growth_rate))%>%
   ungroup %>%
-  ggplot(aes(x = Year, y = cum_growth, color = age_group))+
-  geom_point(size = 0.75) +
+  ggplot(aes(x = Year, y = cum_growth, color = reorder(age_group, lower_age)))+
+  geom_point() +
   geom_line()+
+  scale_color_manual(values = c(palette$green, palette$blue, palette$red))+
   ylab("Population growth index") + ggtitle("Normalized Utah population projection by age group") +
   theme_classic()+
   theme(legend.title = element_blank(),

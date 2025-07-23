@@ -27,17 +27,17 @@ options(java.parameters = "-Xmx8000m")
 
 # Color palette
 palette <- list("white" = "#FAFAFA",
-                "light_grey" = "#d9d9d9",
-                "grey" = "grey50",
                 "dark" = "#0c2230",
                 "red" = "#d7191c",
                 "blue" = "#2c7bb6",
-                "purple" = "#880ED4",
+                "orange" = "#fc8d62",
+                "green" = "#66c2a5",
+                "purple" = "#8da0cb",
                 "sc1275" = "#d7191c",
                 "sc1277" = "#fdae61",
                 "sc1278" = 
                   "grey50", 
-                  #"#ffd93f", 
+                #"#ffd93f", 
                 "sc1280" = "#abd9e9",
                 "sc1281" = "#2c7bb6"
 )
