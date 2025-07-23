@@ -127,7 +127,8 @@ ct_incidence_projections <- ct_ACS_age %>%
   mutate(incidence_rate = tidyr::replace_na(incidence_rate, 0),
          endpoint = "Mortality, All Cause") %>%
   left_join(county_pop_projections, by = c("County", "lower_age", "upper_age"), relationship = "many-to-many")%>%
-  mutate(pop = pop*cum_growth)
+  mutate(pop = pop*cum_growth)%>%
+  filter(Year >= 2024)
   
   
 write.csv(ct_incidence_projections, file = "processed/ct_incidence_projections.csv", row.names = FALSE)

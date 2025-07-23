@@ -24,6 +24,12 @@ options(java.parameters = "-Xmx8000m")
 `%ni%` <- Negate(`%in%`)  # "not in" function
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### set basic parameters
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+baseline_scenario = 1282
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### load csvs
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -38,7 +44,6 @@ scenarios <- do.call(rbind , tables)%>%
   summarise(pm25 = mean(pm25))%>%
   ungroup%>%
   mutate(pm10 = pm25*9)# Assumes pm10 makes up 90% of the total mass and pm2.5 10%
-#0.176
 
 scenarios_daily <- do.call(rbind , tables)%>%
   mutate(scenario = str_sub(id,-32,-29),
@@ -51,6 +56,8 @@ scenarios_daily <- do.call(rbind , tables)%>%
   summarise(pm25 = mean(pm25))%>%
   ungroup%>%
   mutate(pm10 = pm25*9)
+
+table(scenarios_daily$md)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Match centroids back to "real" census tracts
@@ -69,13 +76,26 @@ ct_centroids <- st_as_sf(centroid_location, coords = c("lon", "lat"),
   st_join(tracts.shp %>% st_transform(crs = 4326))%>%
   st_drop_geometry()
 
-scenarios <- scenarios %>%
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Get deltas relative to 1282 mASL
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+scenario_pm_deltas_daily <- scenarios_daily %>%
+  left_join(scenarios_daily %>%
+              filter(scenario == baseline_scenario)%>%
+              rename(baseline_pm10 = pm10,
+                     baseline_pm25 = pm25)%>%
+              dplyr::select(-scenario)
+            , by = c("d", "md", "centroid_name")
+  )%>%
+  mutate(pm10_delta = pm10 - baseline_pm10,
+         pm25_delta = pm25 - baseline_pm25)%>%
+  select(-c(pm10, pm25, baseline_pm10, baseline_pm25))%>%
+  filter(scenario != baseline_scenario)%>%
   right_join(ct_centroids, by = "centroid_name")
 
-write.csv(scenarios, file = "processed/scenario_pm_deltas.csv", row.names = FALSE)
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Write data
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-scenarios_daily <- scenarios_daily %>%
-  right_join(ct_centroids, by = "centroid_name")
-
-write.csv(scenarios_daily, file = "processed/scenario_pm_deltas_daily.csv", row.names = FALSE)
+write.csv(scenario_pm_deltas_daily, file = "processed/scenario_pm_deltas_daily.csv", row.names = FALSE)
