@@ -54,7 +54,7 @@ relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281) # note, excludes 1282 base
 scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1278, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
-n_storms_annual = 3
+n_storms_annual = 2
 
 # main VSL and age-based VSL
 VSL_24 = 12.57222

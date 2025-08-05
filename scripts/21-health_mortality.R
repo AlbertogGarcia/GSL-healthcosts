@@ -51,7 +51,7 @@ relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281) # note, excludes 1282 base
 scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1278, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
-n_storms_annual = 3
+n_storms_annual = 2
 
 # main VSL and age-based VSL
 VSL_24 = 12.57222
@@ -140,9 +140,13 @@ ct_mortality <- ct_mortality_age %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
+            pop = sum(pop, na.rm = T),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T))%>%
   ungroup
+
+
+write.csv(ct_mortality, file = "processed/ct_mortality.csv", row.names = FALSE)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Total overall mortality
@@ -280,7 +284,7 @@ mortality_race <- ct_mortality_agebyrace %>%
   )
 
 ggplot(mortality_race
-       , aes(x=reorder(race, mortality_per_100k), y=mortality_per_100k))+
+       , aes(x=reorder(race, -mortality_per_100k), y=mortality_per_100k))+
   geom_bar(stat='identity')+
   ggtitle("Distribution of mortality risk across race")+
   scale_y_continuous(#breaks = seq(from = 0.05, to = .3, by = 0.05),
@@ -289,14 +293,18 @@ ggplot(mortality_race
   theme(axis.title.x=element_blank())
 
 ggplot(mortality_race
-       , aes(x=scenario, color = race, y=mortality_per_100k))+
+       , aes(x=scenario, color = reorder(race, -mortality_per_100k), y=mortality_per_100k))+
   geom_line()+
+  geom_point()+
   # ggtitle("Distribution of mortality risk across race")+
-  scale_y_continuous(#breaks = seq(from = 0.05, to = .3, by = 0.05),
-    name = paste("Additional mortality per 100 thousand people"))+
+  scale_y_continuous(limits = c(min(mortality_race$mortality_per_100k), max(mortality_race$mortality_per_100k)),
+    name = paste("Dust-induced mortalities per 100 thousand people"))+
   scale_x_reverse(breaks = relevant_scenarios,
-                  name = "Great Salt Lake water level (mASL)")+
-  theme_bw()+
+                  name = "GSL water elevation (mASL)")+
+  scale_color_manual(values = c(palette$dark, palette$red, palette$blue, palette$orange, palette$green),
+                     labels = c("Hawaiian/Pacific Islander", "White Non-hispanic", "Asian", "Hispanic/Latino", "Black/African American")
+                     )+
+  theme_cowplot(14)+
   theme(panel.grid.minor = element_blank(),
         legend.title = element_blank())
 
