@@ -54,7 +54,7 @@ relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281) # note, excludes 1282 base
 scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1278, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
-n_storms_annual = 2
+n_storms_annual = 3
 
 # main VSL and age-based VSL
 VSL_24 = 12.57222
@@ -68,12 +68,11 @@ age_based_VSL_2024 <- read.csv("processed/age_based_VSL_2024.csv")%>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #1 Emissions scenarios by water-level
-scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas_daily.csv", stringsAsFactors =  FALSE)%>%
+scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas_event.csv", stringsAsFactors =  FALSE)%>%
   filter(scenario %in% relevant_scenarios)
 
 #2 Population and incidence
-ct_incidence_projections <- read.csv("processed/ct_incidence_projections.csv", stringsAsFactors =  FALSE) %>%
-  mutate(incidence_rate_daily = incidence_rate/365) # get daily incidence rate
+ct_incidence_projections <- read.csv("processed/ct_incidence_projections.csv", stringsAsFactors =  FALSE)
 
 #Merge w/ pollution deltas 
 ct_projections <- ct_incidence_projections %>%
@@ -143,7 +142,7 @@ total_mortality_projections %>%
   geom_line()+
   geom_point(size = 1)+
   ylab("Annual premature mortalities") +
-  ggtitle("Annual mortality through 2060")+
+  ggtitle("Annual mortality 2025-2060")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
   theme_classic()+
   theme(legend.position = "bottom")
@@ -154,7 +153,7 @@ total_mortality_projections %>%
   geom_line()+
   geom_point(size = 1)+
   ylab("Cumulative premature mortalities") +
-  ggtitle("Cumulative premature mortality through 2060")+
+  ggtitle("Cumulative premature mortality 2025-2060")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
   theme_classic()+
   theme(legend.position = "bottom")
@@ -165,9 +164,10 @@ total_mortality_projections %>%
   geom_line()+
   geom_point(size = 0.9)+
   scale_y_continuous(name = "Present value of cumulative costs (millions USD)",
-                     limits = c(0, 1800),
-                     breaks = seq(0, 1750, by = 250)) +
-  ggtitle("Present value of cumulative costs through 2060")+
+                    # limits = c(0, 1000),
+                    # breaks = seq(0, 1750, by = 250)
+                     ) +
+  ggtitle("Present value of cumulative costs 2025-2060 (3% discount)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
   theme_classic()+
   theme(legend.position = "bottom")

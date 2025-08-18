@@ -48,11 +48,12 @@ scenarios <- do.call(rbind , tables)%>%
 scenarios_daily <- do.call(rbind , tables)%>%
   mutate(scenario = str_sub(id,-32,-29),
          d = str_sub(X,7,8),
+         m = str_sub(X,5,6),
          md = str_sub(X,5,8))%>%
   select(-c(id, X))%>%
-  select(scenario, d, md, everything())%>%
-  pivot_longer(4:ncol(.), names_to = "centroid_name", values_to = "pm25")%>%
-  group_by(scenario, d, md, centroid_name)%>%
+  select(scenario, d, m, md, everything())%>%
+  pivot_longer(5:ncol(.), names_to = "centroid_name", values_to = "pm25")%>%
+  group_by(scenario, d, m, md, centroid_name)%>%
   summarise(pm25 = mean(pm25))%>%
   ungroup%>%
   mutate(pm10 = pm25*9)
@@ -86,7 +87,7 @@ scenario_pm_deltas_daily <- scenarios_daily %>%
               rename(baseline_pm10 = pm10,
                      baseline_pm25 = pm25)%>%
               dplyr::select(-scenario)
-            , by = c("d", "md", "centroid_name")
+            , by = c("d", "m", "md", "centroid_name")
   )%>%
   mutate(pm10_delta = pm10 - baseline_pm10,
          pm25_delta = pm25 - baseline_pm25)%>%
@@ -94,8 +95,16 @@ scenario_pm_deltas_daily <- scenarios_daily %>%
   filter(scenario != baseline_scenario)%>%
   right_join(ct_centroids, by = "centroid_name")
 
+scenario_pm_deltas_event <- scenario_pm_deltas_daily %>%
+  #filter(pm10_delta > 0)%>%
+  group_by(scenario, m, centroid_name, FIPS) %>%
+  summarise(pm10_delta = mean(pm10_delta),
+            pm25_delta = mean(pm25_delta))
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Write data
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 write.csv(scenario_pm_deltas_daily, file = "processed/scenario_pm_deltas_daily.csv", row.names = FALSE)
+write.csv(scenario_pm_deltas_event, file = "processed/scenario_pm_deltas_event.csv", row.names = FALSE)
+

@@ -45,13 +45,13 @@ palette <- list("white" = "#FAFAFA",
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281) # note, excludes 1282 baseline
+all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
+relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281) 
 
 scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1278, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
-n_storms_annual = 2
+n_storms_annual = 3
 
 # main VSL and age-based VSL
 VSL_24 = 12.57222
@@ -64,12 +64,11 @@ age_based_VSL_2024 <- read.csv("processed/age_based_VSL_2024.csv")%>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #1 Emissions scenarios by water-level
-scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas_daily.csv", stringsAsFactors =  FALSE)%>%
-  filter(scenario %in% relevant_scenarios)
+scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas_event.csv", stringsAsFactors =  FALSE)%>%
+  filter(scenario %in% all_scenarios)
 
 #2 Population and incidence
-ct_incidence_mortality <- read.csv("processed/ct_incidence_mortality.csv", stringsAsFactors =  FALSE) %>%
-  mutate(incidence_rate_daily = incidence_rate/365) # get daily incidence rate
+ct_incidence_mortality <- read.csv("processed/ct_incidence_mortality.csv", stringsAsFactors =  FALSE)
 
 age_VSL_2024_grouped <- ct_incidence_mortality %>%
   select(lower_age, upper_age, age_group) %>%
@@ -81,9 +80,15 @@ age_VSL_2024_grouped <- ct_incidence_mortality %>%
 
 
 # Same but disaggregated by race
-ct_incidence_mortality_race <- read.csv("processed/ct_incidence_mortality_race.csv", stringsAsFactors =  FALSE) %>%
-  mutate(incidence_rate_daily = incidence_rate/365) # get daily incidence rate
+ct_incidence_mortality_race <- read.csv("processed/ct_incidence_mortality_race.csv", stringsAsFactors =  FALSE) 
 
+age_VSL_2024_grouped_race <- ct_incidence_mortality_race %>%
+  select(lower_age, upper_age, age_group) %>%
+  distinct()%>%
+  tidyr::crossing(age_based_VSL_2024)%>%
+  filter(age >= lower_age & age <= upper_age)%>%
+  group_by(lower_age, upper_age, age_group) %>%
+  summarise(age_vsl_2024 = mean(age_vsl_2024))
 
 #Merge w/ pollution deltas 
 ct_mortality_pollution <- ct_incidence_mortality %>%
@@ -93,29 +98,45 @@ ct_mortality_pollution <- ct_incidence_mortality %>%
 #Merge w/ pollution deltas 
 ct_mortality_pollution_race <- ct_incidence_mortality_race %>%
   left_join(scenario_pm_deltas, by = "FIPS")%>%
-  left_join(age_VSL_2024_grouped, by = c("lower_age", "upper_age", "age_group"))
+  left_join(age_VSL_2024_grouped_race, by = c("lower_age", "upper_age", "age_group"))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Mortality impacts
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #Coefficients from Orellano et al., (2020)
-###IMPORTANT: all are for a 10 mcrogram increase
-RR_pm25 = 1.0065
-beta_pm25 <- log(RR_pm25)/10
-
-RR_pm10 = 1.0041
-beta_pm10 <- log(RR_pm10)/10
+###IMPORTANT: all are for a 10 microgram increase
 
 #Mortality impact
 ct_mortality_age <- ct_mortality_pollution %>%
-  mutate(mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
-         mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
-         mortality = mortality_pm10 + mortality_pm25,
-         life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
-         costs_VSL = mortality*VSL_24,
-         costs_age_VSL = mortality*age_vsl_2024)%>%
+  mutate(
+    beta_pm10 = case_when(
+      endpoint == "Mortality, All-cause" ~ log(1.0041)/10,
+      endpoint == "Mortality, Respiratory" ~ log(1.0091)/10,
+      endpoint == "Mortality, Cardiovascular" ~ log(1.0060)/10
+      ),
+    beta_pm25 = case_when(
+      endpoint == "Mortality, All-cause" ~ log(1.0065)/10,
+      endpoint == "Mortality, Respiratory" ~ log(1.0073)/10,
+      endpoint == "Mortality, Cardiovascular" ~ log(1.0092)/10
+      ),
+    mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
+    mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
+    mortality = mortality_pm10 + mortality_pm25,
+    life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
+    costs_VSL = mortality*VSL_24,
+    costs_age_VSL = mortality*age_vsl_2024)%>%
   drop_na(scenario)
+
+
+
+
+
+#All-cause coefficients
+RR_pm25 = 1.0065
+beta_pm25 <- log(RR_pm25)/10
+RR_pm10 = 1.0041
+beta_pm10 <- log(RR_pm10)/10
 
 #Mortality impact
 ct_mortality_agebyrace <- ct_mortality_pollution_race %>%
@@ -152,7 +173,7 @@ write.csv(ct_mortality, file = "processed/ct_mortality.csv", row.names = FALSE)
 # Total overall mortality
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 total_mortality <- ct_mortality_age %>%
-  group_by(scenario) %>%
+  group_by(scenario, endpoint) %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
@@ -161,9 +182,11 @@ total_mortality <- ct_mortality_age %>%
   )%>%
   ungroup
 
-
-ggplot(total_mortality
-       , aes(x=reorder(scenario, scenario, order = T), y=costs_VSL, fill = as.character(scenario))
+total_mortality %>%
+  filter(scenario %in% relevant_scenarios,
+         endpoint == "Mortality, All-cause"
+         )%>%
+ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_VSL, fill = as.character(scenario))
 )+
   #geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), color = palette$dark)+
   geom_bar(stat='identity')+
@@ -175,7 +198,7 @@ ggplot(total_mortality
                         , breaks = seq(-0, 10, by = 1)
     )
   )+
-  geom_text(aes(label=round(costs_VSL, 2), y=costs_VSL+VSL_24/abs(max(mortality)+1))
+  geom_text(aes(label=round(costs_VSL, 2), y=costs_VSL+(VSL_24/abs(max(mortality)+5)))
             #, fontface='bold'
   ) +
   #xlab("GSL water level (mASL)")+
@@ -188,33 +211,24 @@ ggplot(total_mortality
         axis.title.x = element_blank())+
   guides(fill = guide_legend(title.position="top", title.hjust = 0.5))
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Mortality by County
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 county_mortality <- ct_mortality_age %>%
-  group_by(scenario, County) %>%
+  group_by(scenario, County, endpoint) %>%
   summarise(pop = sum(pop, na.rm = T),
             mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
-            costs_VSL = sum(costs_VSL, na.rm = T))%>%
+            costs_VSL = sum(costs_VSL, na.rm = T),
+            costs_age_VSL = sum(costs_age_VSL, na.rm = T))%>%
   ungroup
 
 
-# county_mortality %>% 
-#   mutate(proportion_of_burden = costs_VSL/sum(costs_VSL))%>%
-#   group_by(County) %>% 
-#   summarise(proportion_of_burden = mean(proportion_of_burden))%>%
-#   ggplot(aes(x=reorder(County, - proportion_of_burden), y=proportion_of_burden))+
-#   geom_bar(stat='identity')+
-#   ggtitle("Distribution of total costs across counties")+
-#   scale_y_continuous(label = scales::percent, 
-#                      #  breaks = seq(from = 0.05, to = .3, by = 0.05),
-#                      name = "Percent of total expected costs")+
-#   theme_cowplot()+
-#   theme(axis.title.x=element_blank())
-
 county_mortality %>% 
+  filter(endpoint == "Mortality, All-cause") %>%
   mutate(mortality_per_100k = mortality/pop*100000)%>%
   group_by(County) %>% 
   summarise(mortality_per_100k = mean(mortality_per_100k))%>%
@@ -232,37 +246,32 @@ county_mortality %>%
 ### Mortality by age group
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 mortality_age <- ct_mortality_age %>%
-  group_by(scenario, age_group, lower_age, upper_age) %>%
+  group_by(scenario, age_group, lower_age, upper_age, endpoint) %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
             pop = sum(pop, na.rm = T),
-            costs_VSL = sum(costs_VSL, na.rm = T))%>%
+            costs_VSL = sum(costs_VSL, na.rm = T),
+            costs_age_VSL = sum(costs_age_VSL, na.rm = T))%>%
   ungroup
 
 
 mortality_age %>% 
-  mutate(proportion_of_burden = mortality/sum(mortality))%>%
+  filter(scenario == 1278, 
+         endpoint == "Mortality, All-cause"
+         )%>%
+  mutate(proportion_of_mortality = mortality/sum(mortality))%>%
   group_by(age_group, lower_age, upper_age) %>% 
-  summarise(proportion_of_burden = mean(proportion_of_burden))%>%
-  ggplot(aes(x=reorder(age_group, lower_age), y=proportion_of_burden))+
+  summarise(proportion_of_mortality = mean(proportion_of_mortality))%>%
+  ggplot(aes(x=reorder(age_group, lower_age), y=proportion_of_mortality))+
   geom_bar(stat='identity')+
   ggtitle("Distribution of mortality across age")+
   scale_y_continuous(label = scales::percent, 
-                     breaks = seq(from = 0.05, to = .3, by = 0.05),
+                    # breaks = seq(from = 0.01, to = .07, by = 0.01),
                      name = "Percent of total expected mortality")+
   theme_cowplot()+
   theme(axis.title.x=element_blank())
 
-mortality_age %>% 
-  group_by(age_group, lower_age, upper_age) %>% 
-  summarise(mortality_per_100k = mean(mortality)/pop*100000)%>%
-  ggplot(aes(x=reorder(age_group, lower_age), y=mortality_per_100k))+
-  geom_bar(stat='identity')+
-  ggtitle("Distribution of mortality risk by age")+
-  scale_y_continuous(name = "Expected mortality per 100k residents (USD millions)")+
-  theme_cowplot()+
-  theme(axis.title.x=element_blank())
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Mortality by race
@@ -274,50 +283,30 @@ mortality_race <- ct_mortality_agebyrace %>%
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
             pop = sum(pop, na.rm = T),
-            costs_VSL = sum(costs_VSL, na.rm = T)
+            costs_VSL = sum(costs_VSL, na.rm = T),
+            costs_age_VSL = sum(costs_age_VSL, na.rm = T)
             )%>%
-  mutate(mortality_per_100k = mortality/pop*100000)%>%
+  mutate(mortality_per_100k = mortality/pop*100000,
+         cost_per_capita = costs_VSL/pop,
+         age_cost_per_capita = costs_age_VSL/pop)%>%
   ungroup %>%
   filter(race %in% c(
     "Asian alone", "White NH", "Hispanic or Latino", "Black or African American Alone", "Hawaiian and PI Alone"
   )
   )
 
-ggplot(mortality_race
-       , aes(x=reorder(race, -mortality_per_100k), y=mortality_per_100k))+
-  geom_bar(stat='identity')+
-  ggtitle("Distribution of mortality risk across race")+
-  scale_y_continuous(#breaks = seq(from = 0.05, to = .3, by = 0.05),
-    name = "Mortality per 100 thousand people")+
-  theme_cowplot()+
-  theme(axis.title.x=element_blank())
-
-ggplot(mortality_race
-       , aes(x=scenario, color = reorder(race, -mortality_per_100k), y=mortality_per_100k))+
-  geom_line()+
-  geom_point()+
+mortality_race %>%
+ggplot(aes(x=scenario, color = reorder(race, -mortality_per_100k), y=mortality_per_100k))+
+  geom_line(linewidth = 1.5)+
   # ggtitle("Distribution of mortality risk across race")+
-  scale_y_continuous(limits = c(min(mortality_race$mortality_per_100k), max(mortality_race$mortality_per_100k)),
-    name = paste("Dust-induced mortalities per 100 thousand people"))+
+  scale_y_continuous(name = paste("Dust-induced mortalities per 100 thousand people"),
+                     limits = c(0, max(mortality_race$mortality_per_100k))
+                     )+
   scale_x_reverse(breaks = relevant_scenarios,
                   name = "GSL water elevation (mASL)")+
-  scale_color_manual(values = c(palette$dark, palette$red, palette$blue, palette$orange, palette$green),
+  scale_color_manual(values = c(palette$dark, palette$red, palette$green, palette$orange, palette$blue),
                      labels = c("Hawaiian/Pacific Islander", "White Non-hispanic", "Asian", "Hispanic/Latino", "Black/African American")
                      )+
   theme_cowplot(14)+
   theme(panel.grid.minor = element_blank(),
         legend.title = element_blank())
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-### Mortality by income
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-income_sheet = 4
-ct_ACS_income <- readxl::read_excel("data/population/Demographic_Raw_Tables.xlsx", sheet = income_sheet)
-
-ct_mortality_income <- ct_mortality_age %>%
-  left_join(ct_ACS_income, by = "FIPS")%>%
-  mutate(median_ct_HHI = median(as.numeric(`Median household income (dollars)`), na.rm = T),
-         above_median_ct_HHI = ifelse(`Median household income (dollars)` >= median_ct_HHI, 1, 0))
-
