@@ -130,27 +130,6 @@ ct_mortality_age <- ct_mortality_pollution %>%
 
 
 
-
-
-#All-cause coefficients
-RR_pm25 = 1.0065
-beta_pm25 <- log(RR_pm25)/10
-RR_pm10 = 1.0041
-beta_pm10 <- log(RR_pm10)/10
-
-#Mortality impact
-ct_mortality_agebyrace <- ct_mortality_pollution_race %>%
-  mutate(mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
-         mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
-         mortality = mortality_pm10 + mortality_pm25,
-         life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
-         costs_VSL = mortality*VSL_24,
-         costs_age_VSL = mortality*age_vsl_2024
-  )%>%
-  drop_na(scenario)
-
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Create data for analyses
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -277,6 +256,23 @@ mortality_age %>%
 ### Mortality by race
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+#All-cause coefficients
+RR_pm25 = 1.0065
+beta_pm25 <- log(RR_pm25)/10
+RR_pm10 = 1.0041
+beta_pm10 <- log(RR_pm10)/10
+
+#Mortality impact
+ct_mortality_agebyrace <- ct_mortality_pollution_race %>%
+  mutate(mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
+         mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
+         mortality = mortality_pm10 + mortality_pm25,
+         life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
+         costs_VSL = mortality*VSL_24,
+         costs_age_VSL = mortality*age_vsl_2024
+  )%>%
+  drop_na(scenario)
+
 mortality_race <- ct_mortality_agebyrace %>%
   group_by(scenario, race) %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
@@ -304,7 +300,7 @@ ggplot(aes(x=scenario, color = reorder(race, -mortality_per_100k), y=mortality_p
                      )+
   scale_x_reverse(breaks = relevant_scenarios,
                   name = "GSL water elevation (mASL)")+
-  scale_color_manual(values = c(palette$dark, palette$red, palette$green, palette$orange, palette$blue),
+  scale_color_manual(values = c(palette$red, palette$blue, palette$dark, palette$orange, palette$green),
                      labels = c("Hawaiian/Pacific Islander", "White Non-hispanic", "Asian", "Hispanic/Latino", "Black/African American")
                      )+
   theme_cowplot(14)+
