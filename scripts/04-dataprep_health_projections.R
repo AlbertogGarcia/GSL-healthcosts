@@ -71,9 +71,13 @@ gardner_pop_projections %>%
   geom_line()+
   scale_color_manual(values = c(palette$green, palette$blue, palette$red))+
   ylab("Population growth index") + ggtitle("Normalized Utah population projection by age group") +
-  theme_classic()+
+  theme_classic(12)+
   theme(legend.title = element_blank(),
-        legend.position = "bottom")
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5))
+
+ggsave(filename = "age_projections.png", path = "figs",
+       height = 5, width = 6)
 
 # Match age groups to ACS and CDC data
 county_pop_projections <- gardner_pop_projections %>%

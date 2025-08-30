@@ -20,6 +20,16 @@ options(dplyr.summarise.inform = FALSE)  # turn off dplyr group by comments
 options(java.parameters = "-Xmx8000m") 
 `%ni%` <- Negate(`%in%`)  # "not in" function
 
+# Color palette
+palette <- list("white" = "#FAFAFA",
+                "dark" = "#0c2230",
+                "red" = "#d7191c",
+                "blue" = "#2c7bb6",
+                "orange" = "#fc8d62",
+                "green" = "#66c2a5",
+                "purple" = "#8da0cb"
+)
+
 
 # CPI in 2006 and 2024
 # (https://fred.stlouisfed.org/series/CPALTT01USA661S)
@@ -74,14 +84,17 @@ age_vsl_2024 %>%
   pivot_longer(cols = c("vsl_2024", "age_vsl_2024"), values_to = "VSL", names_to = "method")%>%
   filter((age >= 18 & age <= 62) | (method == "vsl_2024" & age <= 80)) %>%
   ggplot(aes(x=age, y = VSL, color = method))+
-  geom_line(linewidth = 1.25)+
-  theme_classic(16)+
+  geom_line(linewidth = 1.2)+
+  theme_classic(12)+
   theme(legend.title = element_blank(),
         legend.position = "bottom")+
   scale_color_manual(labels = c("Cohort-adjusted\n(Aldy & Viscusi 2008)", "EPA-recommended"),
-                     values = c("#A23B72", "#2E86AB")
+                     values = c(palette$blue, palette$red)
                      )+
-  labs(x= "Age", y = "VSL (million 2024 $)")
+  labs(x= "Age", y = "VSL (millions 2024 USD)")
+
+ggsave(filename = "VSL_comparison.png", path = "figs", 
+       height = 5, width = 6)
 
 age_vsl_2024 %>%
   select(age, year ,age_vsl_2024) %>%
