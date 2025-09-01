@@ -27,34 +27,29 @@ options(java.parameters = "-Xmx8000m")
 `%ni%` <- Negate(`%in%`)  # "not in" function
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### Load census tracts and match back to results
+#### Load and organize data
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-Utah_munic <- read_sf("data/gis/UtahMunic/Municipalities_Carto.shp")
-
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Get relevant GSL lake elevation polygons
 GSL_geotif <- terra::rast("data/gis/Great_Salt_Lake_TBDEM_100m_bilinear.tif")
-
 ## from-to-becomes
 # classify the values into three groups 
 # all values >= 0 and <= 0.25 become 1, etc.
 m <- c(0, 4192.913, 1278,
-       # 4192.913, 4210, 1282,
-       # 4210, Inf, NA
-       4192.913, 4207, 1282,
-       4207, Inf, NA
-       )
+       4192.913, 4206.04, 1282,
+       4206.04, Inf, NA
+)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 GSL_rcl <- terra::as.polygons(classify(GSL_geotif, rclmat, include.lowest=FALSE))%>%
   st_as_sf %>%
   mutate(elevation = case_when(Band_1 == 1282 ~ "Long-term avg: 1282mASL",
                                Band_1 == 1278 ~ "Current level: 1278mASL")
-         )
+  )
 
-SLC <- Utah_munic %>%
-  filter(NAME %in% c("Salt Lake City"))
 
-cities2 <- Utah_munic %>%
-  filter(NAME %in% c("Logan", "Provo"))
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Mortality results and integrate with gis files for tracts
 
 ct_mortality <- read.csv("processed/ct_mortality.csv", stringsAsFactors =  FALSE)
 
@@ -82,6 +77,23 @@ ct_mortality.shp <- tracts.shp %>%
   mutate_at(vars(pm_delta:ncol(.)), ~replace_na(., 0))%>%
   st_as_sf()
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Extra administrative boundaries
+
+Utah_munic <- read_sf("data/gis/UtahMunic/Municipalities_Carto.shp")
+
+SLC <- Utah_munic %>% # location of salt lake city
+  filter(NAME %in% c("Salt Lake City"))
+
+cities2 <- Utah_munic %>% # other relevant cities worth including on map
+  filter(NAME %in% c("Logan", "Provo"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Backgrounds and extents
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 get_maptypes()
 
 e_bg <- as(raster::extent(-12595000, -12370000, 4890000, 5125000), "SpatialPolygons")%>%
@@ -106,6 +118,10 @@ ct_mortality_1278 <- ct_mortality.shp %>%
   st_as_sf()
 
 hist(ct_mortality_1278$pm_delta)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## PM map
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 pm_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
   #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
@@ -133,7 +149,12 @@ pm_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
             outer.margins = c(0,0,0,0)) 
 pm_map
 
-cost_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Mortality/cost map
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+mortality_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
   #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
   tm_shape(ct_mortality_1278) + 
   tm_polygons(col = "mortality_per100k",
@@ -156,8 +177,10 @@ cost_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
   tm_layout(legend.outside = FALSE,
             legend.position = c("right", "top"),
             inner.margins = c(0,0,0,0),
-            outer.margins = c(0,0,0,0)) 
-cost_map
+            outer.margins = c(0,0,0,0)) +
+  tm_scale_bar(breaks = c(0, 10, 25))+
+  tm_compass(type = "4star", size = 1.25, position = c("right", "top"))
+mortality_map
 
 
 bg_utah <- basemaps::basemap_terra(ext=utah.shp, returnclass = 'raster', 
@@ -195,7 +218,7 @@ png("figs/map.png"
 grid.newpage()
 
 print(pm_map, vp = viewport(0.25, 0.5)) #x,y coordinates of the grid here
-print(cost_map, vp = viewport(0.75, 0.5)) #x,y coordinates of the grid here
+print(mortality_map, vp = viewport(0.75, 0.5)) #x,y coordinates of the grid here
 print(utah_inset, vp = viewport(0.065, 0.15, height = 0.27))
 # 3. Close the file
 dev.off()

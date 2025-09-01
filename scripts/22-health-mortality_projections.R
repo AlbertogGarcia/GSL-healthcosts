@@ -20,7 +20,8 @@ pacman::p_load(mapview,  # view spatial data in viewer
                fuzzyjoin,
                ggplot2,
                readxl,
-               cowplot
+               cowplot,
+               ggpubr
 )
 
 options(scipen=999)  # turn off sci notation
@@ -38,9 +39,7 @@ palette <- list("white" = "#FAFAFA",
                 "purple" = "#8da0cb",
                 "sc1275" = "#d7191c",
                 "sc1277" = "#fdae61",
-                "sc1278" = 
-                  "grey50", 
-                #"#ffd93f", 
+                "sc1278" = "grey50", 
                 "sc1280" = "#abd9e9",
                 "sc1281" = "#2c7bb6"
 )
@@ -137,38 +136,56 @@ total_mortality_projections <- ct_mortality_projections %>%
 #   filter(Year <= 2050)%>%
 #   select(scenario, Year, relative_mortality, cum_relative_mortality, relative_costs_VSL, PV_cum_relative_costs)
 
-total_mortality_projections %>%
+mortality_proj_annual <- total_mortality_projections %>%
   ggplot(aes(x = Year, y = mortality, color = as.character(scenario)))+
   geom_line()+
   geom_point(size = 1)+
-  ylab("Annual premature mortalities") +
-  ggtitle("Annual mortality 2025-2060")+
+  ylab("Annual mortality") +
+  ggtitle("Annual dust-induced mortality (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
-  theme_classic()+
-  theme(legend.position = "bottom")
+  theme_classic(14)+
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, size=16)
+  )
+mortality_proj_annual
 
-total_mortality_projections %>%
+mortality_proj <- total_mortality_projections %>%
   ggplot(aes(x = Year, y = cum_mortality, color = as.character(scenario)))+
   #geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5)+
   geom_line()+
   geom_point(size = 1)+
   ylab("Cumulative premature mortalities") +
-  ggtitle("Cumulative premature mortality 2025-2060")+
+  ggtitle("Cumulative mortality (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
-  theme_classic()+
-  theme(legend.position = "bottom")
+  theme_classic(14)+
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, size=16)
+  )
+mortality_proj
 
-total_mortality_projections %>%
+
+ggarrange(mortality_proj_annual, mortality_proj, 
+          ncol = 2, nrow = 1,
+          labels = c("A", "B"),
+          legend = "bottom", common.legend = T)
+ggsave("figs/mortality_projections.png", width = 11, height = 5.5)
+
+
+
+costs_proj <- total_mortality_projections %>%
   ggplot(aes(x = Year, y = PV_cum_costs, color = as.character(scenario)))+
   #geom_hline(yintercept = 1000, linetype = "dashed", linewidth = 0.5)+
   geom_line()+
   geom_point(size = 0.9)+
-  scale_y_continuous(name = "Present value of cumulative costs (millions USD)",
-                    # limits = c(0, 1000),
-                    # breaks = seq(0, 1750, by = 250)
+  scale_y_continuous(name = "Cumulative mortality costs (millions USD)",
+                    # limits = c(0, 500),
+                     breaks = seq(0, 500, by = 100)
                      ) +
-  ggtitle("Present value of cumulative costs 2025-2060 (3% discount)")+
+  ggtitle("Present value of mortality costs (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
-  theme_classic()+
-  theme(legend.position = "bottom")
+  theme_classic(14)+
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, size=16))
+costs_proj
 
+ggsave("figs/cost_projections.png", width = 6, height = 5)

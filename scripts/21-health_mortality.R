@@ -165,7 +165,49 @@ total_mortality <- ct_mortality_age %>%
   )%>%
   ungroup
 
-total_mortality %>%
+
+mortality_costs_plot_prep <- total_mortality %>%
+  select(scenario, costs_VSL, endpoint) %>%
+  filter(scenario %in% relevant_scenarios)%>%
+  group_by(scenario)%>%
+  mutate(costs_VSL = ifelse(endpoint == "Mortality, All-cause", 2*costs_VSL - sum(costs_VSL), costs_VSL),
+         endpoint = case_when(endpoint == "Mortality, All-cause" ~ "Other causes",
+                              endpoint == "Mortality, Respiratory" ~ "Respiratory",
+                              endpoint == "Mortality, Cardiovascular" ~ "Cardiovascular"),
+         total_costs_VSL = sum(costs_VSL)
+         ) %>%
+  ungroup 
+
+mortality_costs_plot <- mortality_costs_plot_prep %>%
+  ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_VSL, fill = reorder(endpoint, - costs_VSL))
+  )+
+  geom_bar(stat='identity')+
+  geom_hline(yintercept = 0, linewidth = 0.25)+
+  scale_y_continuous(
+    "Expected costs (millions USD)", 
+    sec.axis = sec_axis(~ . / VSL_24, 
+                        name = "Expected mortalities"
+    )
+  )+
+  geom_text(data = mortality_costs_plot_prep
+            , aes(label=round(total_costs_VSL, 2), y=total_costs_VSL+1)
+            #, fontface='bold'
+  ) +
+  xlab("GSL water elevation (mASL)")+
+  scale_fill_manual(values = c(palette$red, palette$blue, palette$green, palette$dark), name = "GSL water level (mASL)")+
+  theme_cowplot(16)+
+  theme(legend.position = "top",
+        legend.title = element_blank(),
+       # axis.text.x = element_blank(),
+       # axis.ticks.x = element_blank(),
+       # axis.title.x = element_blank()
+       )+
+  guides(fill = guide_legend(title.position="top", reverse=T, title.hjust = 0.5))
+mortality_costs_plot
+
+
+
+all_cause_costs <- total_mortality %>%
   filter(scenario %in% relevant_scenarios,
          endpoint == "Mortality, All-cause"
          )%>%
@@ -193,7 +235,38 @@ ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_VSL, fill = as.char
         axis.ticks.x = element_blank(),
         axis.title.x = element_blank())+
   guides(fill = guide_legend(title.position="top", title.hjust = 0.5))
-
+all_cause_costs
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Alternate VSL comparison
+total_mortality %>%
+  filter(scenario %in% relevant_scenarios,
+         endpoint == "Mortality, All-cause"
+  )%>%
+  pivot_longer(cols = c("costs_VSL", "costs_age_VSL"), names_to = "VSL_type", values_to = "costs") %>%
+  mutate(VSL_type = case_when(VSL_type == "costs_VSL" ~ "EPA recommended",
+                              VSL_type == "costs_age_VSL" ~ "Cohort-adjusted\n(Aldy & Viscusi 2008)"
+  )) %>%
+  ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs, fill = reorder(VSL_type, - costs))
+  )+
+  #geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), color = palette$dark)+
+  geom_bar(stat='identity', width=.8, position = "dodge")+
+  geom_hline(yintercept = 0, linewidth = 0.25)+
+  scale_y_continuous(
+    "Expected costs (millions USD)", 
+    # sec.axis = sec_axis(~ . / VSL_24, 
+    #                     name = "Expected mortalities"
+    #                     , breaks = seq(-0, 10, by = 1)
+    # )
+  )+
+  scale_fill_manual(values = c(palette$red, palette$blue), name = "VSL")+
+  theme_classic(16)+
+  xlab("GSL water elevation (mASL)") + 
+  #ggtitle("Premature mortality costs by cohort-adjusted VSL")+
+  theme(legend.position = "bottom",
+        legend.title = element_blank()
+      )+
+  guides(fill = guide_legend(title.position="top", title.hjust = 0.5))
+ggsave("figs/mortality_age_VSL.png", width = 8, height = 6)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Mortality by County
@@ -243,18 +316,23 @@ mortality_age %>%
   filter(scenario == 1278, 
          endpoint == "Mortality, All-cause"
          )%>%
-  mutate(proportion_of_mortality = mortality/sum(mortality))%>%
+  mutate(proportion_of_mortality = mortality/sum(mortality),
+         age_group = ifelse(age_group == "85 and over", "Over 85", age_group))%>%
   group_by(age_group, lower_age, upper_age) %>% 
   summarise(proportion_of_mortality = mean(proportion_of_mortality))%>%
   ggplot(aes(x=reorder(age_group, lower_age), y=proportion_of_mortality))+
   geom_bar(stat='identity')+
-  ggtitle("Distribution of mortality across age")+
+  ggtitle("All-cause mortality by age")+
   scale_y_continuous(label = scales::percent, 
                     # breaks = seq(from = 0.01, to = .07, by = 0.01),
                      name = "Percent of total expected mortality")+
-  theme_cowplot()+
-  theme(axis.title.x=element_blank())
-
+  theme_classic(16)+
+  theme(axis.title.x=element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(size = 11)
+  )
+ggsave("figs/mortality_age_hist.png", 
+       width = 9, height = 6)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Mortality by race
@@ -312,15 +390,24 @@ total_mortality_race %>%
 ggplot(aes(x=scenario, color = reorder(race, -mortality_per_100k), y=mortality_per_100k))+
   geom_line(linewidth = 1.5)+
   # ggtitle("Distribution of mortality risk across race")+
-  scale_y_continuous(name = paste("Dust-induced mortalities per 100 thousand people"),
+  scale_y_continuous(name = paste("Premature mortality (per 100k)"),
                      limits = c(0, max(total_mortality_race$mortality_per_100k))
                      )+
-  scale_x_reverse(breaks = relevant_scenarios,
+  #scale_x_reverse(
+  scale_x_continuous(
+    breaks = relevant_scenarios,
                   name = "GSL water elevation (mASL)")+
   scale_color_manual(values = c(palette$red, palette$blue, palette$dark, palette$orange, palette$green),
                      labels = c("Hawaiian/Pacific Islander", "White Non-hispanic", "Asian", "Hispanic/Latino", "Black/African American")
                      )+
-  theme_cowplot(14)+
+  ggtitle("Dust-induced mortality by race")+
+  theme_classic(16)+
+  guides(color=guide_legend(nrow=2,byrow=TRUE))+
   theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom",
         legend.title = element_blank())
+
+ggsave("figs/mortality_race.png", 
+       width = 7, height = 8)
 
