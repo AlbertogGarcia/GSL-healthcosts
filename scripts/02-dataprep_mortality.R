@@ -104,8 +104,7 @@ ct_incidence_mortality <- ct_ACS_age %>%
   expand_grid(data.frame("endpoint" = c("Mortality, All-cause", "Mortality, Respiratory", "Mortality, Cardiovascular")))%>%
   full_join(county_incidence, by = c("lower_age", "upper_age", "County", "endpoint"), relationship = "many-to-many")%>%
   mutate(incidence_rate = tidyr::replace_na(incidence_rate, 0),
-         incidence_rate_daily = incidence_rate/365, # get daily incidence rate
-         incidence_rate_event = incidence_rate_daily*3)
+         incidence_rate_daily = incidence_rate/365) # get daily incidence rate
 
 
 write.csv(ct_incidence_mortality, file = "processed/ct_incidence_mortality.csv", row.names = FALSE)

@@ -48,6 +48,7 @@ GSL_rcl <- terra::as.polygons(classify(GSL_geotif, rclmat, include.lowest=FALSE)
   )
 
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Mortality results and integrate with gis files for tracts
 
@@ -74,7 +75,7 @@ ct_mortality.shp <- tracts.shp %>%
   filter(County %in% ct_mortality$County
          , endpoint == "Mortality, All-cause"
          )%>%
-  mutate_at(vars(pm_delta:ncol(.)), ~replace_na(., 0))%>%
+  mutate_at(vars(pm_delta:ncol(.)), ~tidyr::replace_na(., 0))%>%
   st_as_sf()
 
 
@@ -112,7 +113,7 @@ bg_labels <- basemaps::basemap_terra(ext=ct_mortality.shp,
 
 ct_mortality_1278 <- ct_mortality.shp %>%
   mutate(mortality_per100k = mortality/pop*100000,
-         mortality_per100k = replace_na(mortality_per100k, 0)) %>%
+         mortality_per100k = tidyr::replace_na(mortality_per100k, 0)) %>%
   filter(scenario == 1278 | is.na(scenario)) %>%
   st_transform(terra::crs(bg)) %>% 
   st_as_sf()
@@ -132,8 +133,8 @@ pm_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
           pal = "-magma",
           alpha = 0.85,
           lwd = 0.2,
-          breaks = c(0, 1000, 2000),
-          labels = c(0, 1000, "2000 or more")
+          breaks = c(0, 1000, 2000, 3000),
+          labels = c(0, 1000, 2000, "3000 or more")
   )+
   tm_shape(GSL_rcl) + tm_fill("elevation",
                               title = "GSL elevation",
@@ -163,8 +164,8 @@ mortality_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
               pal = "-magma",
               alpha = 0.85,
               lwd = 0.15,
-              breaks = c(0, 0.05, 0.1, .15),
-              labels = c(0, 0.05, 0.1, "0.15 or more")
+              breaks = c(0, 0.05, 0.1, .25),
+              labels = c(0, 0.05, 0.1, "0.25 or more")
   )+
   tm_shape(GSL_rcl) + tm_fill("elevation",
                               palette = c("#64a2b8", "#cdb9a6"),

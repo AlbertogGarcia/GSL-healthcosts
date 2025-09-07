@@ -35,7 +35,6 @@ baseline_scenario = 1282
 
 files  <- list.files("data/dust", pattern = '\\.csv', full.names = T)
 tables <- lapply(seq_along(files), function(x) cbind(read.csv(files[x], header = TRUE), id=files[x]))
-
 scenarios <- do.call(rbind , tables)%>%
   mutate(scenario = str_sub(id,-32,-29))%>%
   select(-c(id, X))%>%
@@ -46,17 +45,20 @@ scenarios <- do.call(rbind , tables)%>%
   ungroup%>%
   mutate(pm10 = pm25*9)# Assumes pm10 makes up 90% of the total mass and pm2.5 10%
 
-scenarios_hourly <- do.call(rbind , tables)%>%
+scenarios_daily <- do.call(rbind , tables)%>%
   mutate(scenario = str_sub(id,-32,-29),
-         h = str_sub(X,-4,-1),
+         d = str_sub(X,7,8),
+         m = str_sub(X,5,6),
          md = str_sub(X,5,8))%>%
   select(-c(id, X))%>%
-  select(scenario, h, md, everything())%>%
-  pivot_longer(6:ncol(.), names_to = "centroid_name", values_to = "pm25")%>%
-  group_by(scenario, h, md, centroid_name)%>%
+  select(scenario, d, m, md, everything())%>%
+  pivot_longer(5:ncol(.), names_to = "centroid_name", values_to = "pm25")%>%
+  group_by(scenario, d, m, md, centroid_name)%>%
   summarise(pm25 = mean(pm25))%>%
   ungroup%>%
   mutate(pm10 = pm25*9)
+
+table(scenarios_daily$md)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Match centroids back to "real" census tracts
@@ -71,7 +73,7 @@ tracts.shp <- read_sf("data/gis/tracts/CensusTracts2020.shp")%>%
 centroid_location <- read.csv("data/dust/centroid_locations/centroid_location.csv")
 
 ct_centroids <- st_as_sf(centroid_location, coords = c("lon", "lat"), 
-                         crs = 4326)%>%
+         crs = 4326)%>%
   st_join(tracts.shp %>% st_transform(crs = 4326))%>%
   st_drop_geometry()
 
@@ -79,85 +81,25 @@ ct_centroids <- st_as_sf(centroid_location, coords = c("lon", "lat"),
 #### Get deltas relative to 1282 mASL
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-combos <- expand.grid("h" = unique(scenarios_hourly$h),
-                    "md" = unique(scenarios_hourly$md),
-                    "scenario" = unique(scenarios_hourly$scenario),
-                    "centroid_name" = unique(scenarios_hourly$centroid_name)
-)
-
-scenario_pm_deltas_hourly <- scenarios_hourly %>%
-  mutate(event = str_sub(md, 1, 2)) %>%
-  left_join(scenarios_hourly %>%
+scenario_pm_deltas_daily <- scenarios_daily %>%
+  left_join(scenarios_daily %>%
               filter(scenario == baseline_scenario)%>%
               rename(baseline_pm10 = pm10,
                      baseline_pm25 = pm25)%>%
               dplyr::select(-scenario)
-            , by = c("h", "md", "centroid_name")
+            , by = c("d", "m", "md", "centroid_name")
   )%>%
   mutate(pm10_delta = pm10 - baseline_pm10,
          pm25_delta = pm25 - baseline_pm25)%>%
   select(-c(pm10, pm25, baseline_pm10, baseline_pm25))%>%
-  #right_join(combos, by = c("h", "md", "scenario", "centroid_name"))%>%
   filter(scenario != baseline_scenario)%>%
-  right_join(ct_centroids, by = "centroid_name")%>%
-  drop_na(scenario)
+  right_join(ct_centroids, by = "centroid_name")
 
-
-# plot one of the events by hour
-event_1 <- scenario_pm_deltas_hourly %>%
-  filter(event %in% "04") %>%
-  group_by(h, md, scenario) %>%
-  summarise(pm10_delta = mean(pm10_delta, na.rm = T))%>%
-  ungroup %>%
-  group_by(scenario) %>%
-  arrange(md, h) %>%
-  mutate(event_hour = 1:n())
-  
-# get pollution from event one by event time
-event_1 %>%
-  ggplot(aes(x = event_hour, y = pm10_delta, color = scenario))+
-  ylab("Particulate Matter Exposure") + xlab("Storm hour")+
-  geom_line()+
-  theme_minimal()
-
-# plot the other by hour
-event_2 <- scenario_pm_deltas_hourly %>%
-  filter(event %in% "05") %>%
-  group_by(h, md, scenario) %>%
-  summarise(pm10_delta = mean(pm10_delta, na.rm = T))%>%
-  ungroup %>%
-  group_by(scenario) %>%
-  arrange(md, h) %>%
-  mutate(event_hour = 1:n())
-  
-event_2 %>%  
-  ggplot(aes(x = event_hour, y = pm10_delta, color = scenario))+
-  ylab("Particulate Matter Exposure") + xlab("Storm hour")+
-  geom_line()+
-  theme_minimal()
-
-event_1_length <- max(event_1$event_hour)
-event_2_length <- max(event_2$event_hour)
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-## Try interpolation
-# library(zoo)
-# event_2[, c := exp(na.spline(log(pm10_delta), x = , na.rm = FALSE)), by = group]
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-scenario_pm_deltas_event <- scenario_pm_deltas_hourly %>%
-  group_by(scenario, event, FIPS) %>%
+scenario_pm_deltas_event <- scenario_pm_deltas_daily %>%
+  #filter(pm10_delta > 0)%>%
+  group_by(scenario, m, centroid_name, FIPS) %>%
   summarise(pm10_delta = mean(pm10_delta),
-            pm25_delta = mean(pm25_delta))%>%
-  mutate(event_length = case_when(event == "04" ~ event_1_length,
-                                  event == "05" ~ event_2_length),
-         pm10_delta = ifelse(event_length < 24, pm10_delta*event_length/24, pm10_delta),
-         pm25_delta = ifelse(event_length < 24, pm25_delta*event_length/24, pm10_delta),
-         event_days = case_when(event_length < 24 ~ 1,
-                                event_length >= 24 ~ event_length/24),
-  )
+            pm25_delta = mean(pm25_delta))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Write data

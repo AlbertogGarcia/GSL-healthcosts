@@ -84,7 +84,7 @@ ct_projections <- ct_incidence_projections %>%
 
 #Coefficients from Orellano et al., (2020)
 ###IMPORTANT: all are for a 10 mcrogram increase
-RR_pm25 = 1.0065
+RR_pm25 = 1.0065 # PM2.5 RR from a short-term exposure
 beta_pm25 <- log(RR_pm25)/10
 
 RR_pm10 = 1.0041
@@ -92,8 +92,9 @@ beta_pm10 <- log(RR_pm10)/10
 
 #Mortality impact
 ct_mortality_projections <- ct_projections %>%
-  mutate(mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
-         mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_daily*pop)*(n_storms_annual/n_storms_data),
+  mutate(incidence_rate_event = incidence_rate_daily*event_days,
+         mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+         mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          mortality = mortality_pm10 + mortality_pm25,
          FV_costs_VSL = mortality*VSL_24,
          PV_costs_VSL = FV_costs_VSL/(1+0.03)^(Year - 2024)
@@ -139,53 +140,106 @@ total_mortality_projections <- ct_mortality_projections %>%
 mortality_proj_annual <- total_mortality_projections %>%
   ggplot(aes(x = Year, y = mortality, color = as.character(scenario)))+
   geom_line()+
-  geom_point(size = 1)+
-  ylab("Annual mortality") +
-  ggtitle("Annual dust-induced mortality (2025-2060)")+
+  geom_point(size = 1.5)+
+  scale_y_continuous(name = "Annual mortality",
+                     limits = c(0, 9),
+                     breaks = seq(0, 10, by = 2)
+                    ) +
+  ggtitle("Annual all-cause mortality (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
-  theme_classic(14)+
+  theme_cowplot(14)+
   theme(legend.position = "bottom",
         plot.title = element_text(hjust = 0.5, size=16)
   )
 mortality_proj_annual
 
+ggsave("figs/mortality_projections_annual.png", width = 6, height = 5)
+
+
 mortality_proj <- total_mortality_projections %>%
   ggplot(aes(x = Year, y = cum_mortality, color = as.character(scenario)))+
   #geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5)+
   geom_line()+
-  geom_point(size = 1)+
-  ylab("Cumulative premature mortalities") +
-  ggtitle("Cumulative mortality (2025-2060)")+
+  geom_point(size = 1.5)+
+  scale_y_continuous(name = "Cumulative premature mortality",
+                     limits = c(0, 250),
+                     breaks = seq(0, 250, by = 50)
+                     ) +
+  ggtitle("Projected mortality (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
-  theme_classic(14)+
+  theme_cowplot(16)+
   theme(legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5, size=16)
+        plot.title = element_text(hjust = 0.5)#, size=16)
   )
 mortality_proj
-
-
-ggarrange(mortality_proj_annual, mortality_proj, 
-          ncol = 2, nrow = 1,
-          labels = c("A", "B"),
-          legend = "bottom", common.legend = T)
-ggsave("figs/mortality_projections.png", width = 11, height = 5.5)
 
 
 
 costs_proj <- total_mortality_projections %>%
   ggplot(aes(x = Year, y = PV_cum_costs, color = as.character(scenario)))+
-  #geom_hline(yintercept = 1000, linetype = "dashed", linewidth = 0.5)+
   geom_line()+
-  geom_point(size = 0.9)+
+  geom_point(size = 1.5)+
   scale_y_continuous(name = "Cumulative mortality costs (millions USD)",
                     # limits = c(0, 500),
-                     breaks = seq(0, 500, by = 100)
+                     breaks = seq(0, 2000, by = 250)
                      ) +
-  ggtitle("Present value of mortality costs (2025-2060)")+
+  ggtitle("Present value of projected costs (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
-  theme_classic(14)+
+  theme_cowplot(16)+
   theme(legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5, size=16))
+        plot.title = element_text(hjust = 0.5)#, size=16)
+        )
 costs_proj
+ggarrange(mortality_proj, costs_proj,
+          ncol = 1, nrow = 2,
+          labels = c("A", "B"),
+          legend = "bottom", common.legend = T)
+ggsave("figs/mortality_projections.png", width = 6, height = 11)
 
-ggsave("figs/cost_projections.png", width = 6, height = 5)
+
+A <- ggarrange(mortality_costs_plot, mortality_race,
+               ncol = 2, nrow = 1,
+               labels = c("A", "B"),
+               legend = "top", common.legend = F,
+               font.label = list(size = 22)
+               )
+
+B <- ggarrange(mortality_proj, costs_proj,
+               ncol = 2, nrow = 1,
+               labels = c("C", "D"),
+               legend = "none", common.legend = F,
+               font.label = list(size = 22)
+)
+
+library(patchwork)
+
+leg <- plot_spacer() + get_legend(mortality_proj) + plot_spacer() + plot_layout(ncol = 3, nrow = 1, 
+                                                                                widths = c(0.65, 1, 1))
+
+
+(A / plot_spacer()/ B / leg) + plot_layout(ncol = 1, nrow = 4, 
+                          heights = c(1, 0.025, 1, 0.05)
+)
+ggsave("figs/mortality_quad.png", width = 14, height = 14)
+
+A_alt <- plot_spacer() + ggarrange(mortality_costs_plot,
+               ncol = 1, nrow = 1,
+               labels = c("A"), legend = "none",
+               font.label = list(size = 22)
+) + plot_spacer() + plot_layout(widths = c(1, 3.5, 1))
+leg_A <- plot_spacer() + get_legend(mortality_costs_plot) + plot_spacer() + plot_layout(ncol = 3, nrow = 1, 
+                                                                                  widths = c(0.8, 1, 1))
+
+B_alt <- ggarrange(mortality_proj, costs_proj,
+               ncol = 2, nrow = 1,
+               labels = c("B", "C"),
+               legend = "none", common.legend = F,
+               font.label = list(size = 22)
+)
+
+
+
+(A_alt / leg_A / plot_spacer() / B_alt / leg) + plot_layout(ncol = 1, nrow = 5, 
+                                           heights = c(1, 0.1, 0.05, 1, 0.1)
+)
+ggsave("figs/mortality_trio.png", width = 13, height = 13)
