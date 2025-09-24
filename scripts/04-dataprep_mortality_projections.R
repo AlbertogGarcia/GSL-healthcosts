@@ -92,8 +92,8 @@ county_pop_projections <- gardner_pop_projections %>%
   pivot_longer(`Population Ages 0-4`:ncol(.), , names_to = "age_group", values_to = "pop")%>%
   rename(County = Geography)%>%
   mutate(age_group = str_replace(str_remove(age_group, "Population Ages "), "-", " to "),
-         lower_age = str_sub(age_group,1,2),
-         upper_age = ifelse(lower_age == 85, 100, str_sub(age_group,-2,-1)),
+         start.age = str_sub(age_group,1,2),
+         end.age = ifelse(start.age == 85, 100, str_sub(age_group,-2,-1)),
          County = str_remove(County, " County")
   )%>%
   filter(Year >= ACS_year_final)%>%
@@ -101,78 +101,110 @@ county_pop_projections <- gardner_pop_projections %>%
   mutate(growth_rate = ifelse(Year == ACS_year_final, 0, (pop/lag(pop))-1))%>%
   mutate(cum_growth = cumprod(1 + growth_rate))%>%
   ungroup%>%
-  select(County, Year, lower_age, upper_age, growth_rate, cum_growth)%>%
-  mutate_at(vars(lower_age, upper_age), ~ as.double(.))
+  select(County, Year, start.age, end.age, cum_growth)%>%
+  mutate_at(vars(start.age, end.age), ~ as.double(.))
 
 
-# census-tract population demographics (by age)
-
-age_sheet = 3
-ct_ACS_age_wide <- readxl::read_excel("data/population/Demographic_Raw_Tables.xlsx", sheet = age_sheet)
-
-ct_ACS_age <- ct_ACS_age_wide %>%
-  select(-`Total population`)%>%
-  mutate("5 to 24 years" = `20 to 24 years` + `15 to 19 years` + `10 to 14 years` + `5 to 9 years`,
-         "25 to 64 years" = `25 to 34 years` + `35 to 44 years` + `45 to 54 years` + `55 to 59 years` + `60 to 64 years`,
-         "65 to 84 years" = `65 to 74 years` + `75 to 84 years`
-         )%>%
-  pivot_longer(`Under 5 years`:ncol(.), names_to = "age_group", values_to = "pop")%>%
-  filter(age_group %in% c("Under 5 years",
-                          "5 to 24 years", 
-                          "25 to 64 years",
-                          "65 to 84 years",
-                          "85 and over")
-  )%>%
-  mutate(lower_age = str_sub(age_group,1,2),
-         lower_age = as.numeric(ifelse(lower_age %in% "Un",0,lower_age)),
-         age_group = str_remove(age_group," years"),
-         upper_age = str_sub(age_group,-2,-1),
-         upper_age = as.numeric(ifelse(upper_age %in% "er",100,upper_age)),
-         upper_age = ifelse(upper_age==5,4,upper_age) )## What it actually should be (under 5 year old)
 
 
-# get county by age population totals
-county_age_pop_ACS <- ct_ACS_age %>%
-  group_by(County, lower_age, upper_age)%>%
-  summarise(pop = sum(pop, na.rm = T))
+ct_incidence_mortality <- read.csv("processed/ct_incidence_mortality.csv", stringsAsFactors =  FALSE) %>%
+  filter(endpoint == "Mortality, All-cause")
+table(ct_incidence_mortality$age_group)
 
-# Get county level incidence data
-county_incidence <- read.csv("data/health/mortality/CDC_wonder/compressed/age/mortality_all-cause_1016.csv") %>%
-  mutate(age_group = ifelse(Age.Group %in% c("< 1 year", "1-4 years"), "Under 5 years", Age.Group),
-         age_group = ifelse(Age.Group %in% c("5-9 years", "10-14 years", "15-19 years", "20-24 years"), "5-24 years", age_group),
-         age_group = ifelse(Age.Group %in% c("25-34 years", "35-44 years", "45-54 years", "55-64 years"), "25-64 years", age_group),
-         age_group = ifelse(Age.Group %in% c("65-74 years", "75-84 years"), "65-84 years", age_group),
-         )%>%
-  drop_na(County.Code)%>% filter(age_group != "NS") %>%
-  group_by(County, age_group)%>%
-  summarise(Deaths = sum(Deaths, na.rm = T),
-            Population = sum(Population, na.rm = T))%>%
-  ungroup %>%
-  mutate(County = str_remove(County, " County, UT"))%>%
-  filter(County %in% county_age_pop_ACS$County)%>%
-  mutate(age_group = str_replace(age_group, "-", " to "),
-         age_group = str_remove(age_group," years"),
-         lower_age = str_sub(age_group,1,2),
-         lower_age = ifelse(lower_age %in% "Un",0,lower_age),
-         lower_age = as.numeric(lower_age),
-         upper_age = str_sub(age_group,-2,-1),
-         upper_age = as.numeric(ifelse(lower_age == 85,100,upper_age)),
-         upper_age = ifelse(upper_age==5,4,upper_age), ## What it actually should be (under 5 year old)
-         incidence_rate = Deaths/Population
-  ) %>%
-  select(County, lower_age, upper_age, incidence_rate)
-  
-# match back to census tracts
-ct_incidence_projections <- ct_ACS_age %>%
-  left_join(county_incidence, by = c("lower_age", "upper_age", "County"))%>%
-  mutate(incidence_rate = tidyr::replace_na(incidence_rate, 0),
-         incidence_rate_daily = incidence_rate/365,
-         endpoint = "Mortality, All Cause") %>%
-  left_join(county_pop_projections, by = c("County", "lower_age", "upper_age"), relationship = "many-to-many")%>%
-  mutate(pop = pop*cum_growth)%>%
-  filter(Year >= 2025)
-  
-  
+
+ct_incidence_projections <- ct_incidence_mortality %>%
+  fuzzyjoin::fuzzy_left_join(county_pop_projections,
+                             by = c("County" = "County",
+                                    "lower_age" = "start.age" ,
+                                    "upper_age" = "end.age"),
+                             match_fun = list(`==`,`>=`, `<=`))%>%
+  mutate(County = dplyr::coalesce(County.x,County.y),
+         pop = pop*cum_growth)%>%
+  select(-County.x,-County.y, -cum_growth, -start.age, -end.age)
+
 write.csv(ct_incidence_projections, file = "processed/ct_incidence_projections.csv", row.names = FALSE)
+
+
+
+
+
+
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# # census-tract population demographics (by age)
+# 
+# age_sheet = 3
+# ct_ACS_age_wide <- readxl::read_excel("data/population/Demographic_Raw_Tables.xlsx", sheet = age_sheet)
+# 
+# ct_ACS_age <- ct_ACS_age_wide %>%
+#   select(-`Total population`)%>%
+#   mutate("18 to 19 years" = `15 to 19 years` - `Under 18 years`
+#          )%>%
+#   pivot_longer(`Under 5 years`:ncol(.), names_to = "age_group", values_to = "pop")%>%
+#   filter(age_group %in% c("Under 5 years",
+#                           "5 to 24 years", 
+#                           "25 to 64 years",
+#                           "65 to 84 years",
+#                           "85 and over")
+#   )%>%
+#   mutate(lower_age = str_sub(age_group,1,2),
+#          lower_age = as.numeric(ifelse(lower_age %in% "Un",0,lower_age)),
+#          age_group = str_remove(age_group," years"),
+#          upper_age = str_sub(age_group,-2,-1),
+#          upper_age = as.numeric(ifelse(upper_age %in% "er",100,upper_age)),
+#          upper_age = ifelse(upper_age==5,4,upper_age) )## What it actually should be (under 5 year old)
+# 
+# 
+# # get county by age population totals
+# county_age_pop_ACS <- ct_ACS_age %>%
+#   group_by(County, lower_age, upper_age)%>%
+#   summarise(pop = sum(pop, na.rm = T))
+# 
+# # Get county level incidence data
+# county_incidence <- read.csv("data/health/mortality/CDC_wonder/compressed/age/mortality_all-cause_1016.csv") %>%
+#   mutate(age_group = ifelse(Age.Group %in% c("< 1 year", "1-4 years"), "Under 5 years", Age.Group),
+#          age_group = ifelse(Age.Group %in% c("5-9 years", "10-14 years", "15-19 years", "20-24 years"), "5-24 years", age_group),
+#          age_group = ifelse(Age.Group %in% c("25-34 years", "35-44 years", "45-54 years", "55-64 years"), "25-64 years", age_group),
+#          age_group = ifelse(Age.Group %in% c("65-74 years", "75-84 years"), "65-84 years", age_group),
+#          )%>%
+#   drop_na(County.Code)%>% filter(age_group != "NS") %>%
+#   group_by(County, age_group)%>%
+#   summarise(Deaths = sum(Deaths, na.rm = T),
+#             Population = sum(Population, na.rm = T))%>%
+#   ungroup %>%
+#   mutate(County = str_remove(County, " County, UT"))%>%
+#   filter(County %in% county_age_pop_ACS$County)%>%
+#   mutate(age_group = str_replace(age_group, "-", " to "),
+#          age_group = str_remove(age_group," years"),
+#          lower_age = str_sub(age_group,1,2),
+#          lower_age = ifelse(lower_age %in% "Un",0,lower_age),
+#          lower_age = as.numeric(lower_age),
+#          upper_age = str_sub(age_group,-2,-1),
+#          upper_age = as.numeric(ifelse(lower_age == 85,100,upper_age)),
+#          upper_age = ifelse(upper_age==5,4,upper_age), ## What it actually should be (under 5 year old)
+#          incidence_rate = Deaths/Population
+#   ) %>%
+#   select(County, lower_age, upper_age, incidence_rate)
+#   
+# # match back to census tracts
+# ct_incidence_projections <- ct_ACS_age %>%
+#   left_join(county_incidence, by = c("lower_age", "upper_age", "County"))%>%
+#   mutate(incidence_rate = tidyr::replace_na(incidence_rate, 0),
+#          incidence_rate_daily = incidence_rate/365,
+#          endpoint = "Mortality, All Cause") %>%
+#   left_join(county_pop_projections, by = c("County", "lower_age", "upper_age"), relationship = "many-to-many")%>%
+#   mutate(pop = pop*cum_growth)%>%
+#   filter(Year >= 2025)
+#   
+#   
 
 

@@ -154,7 +154,7 @@ scenario_pm_deltas_event <- scenario_pm_deltas_hourly %>%
   mutate(event_length = case_when(event == "04" ~ event_1_length,
                                   event == "05" ~ event_2_length),
          pm10_delta = ifelse(event_length < 24, pm10_delta*event_length/24, pm10_delta),
-         pm25_delta = ifelse(event_length < 24, pm25_delta*event_length/24, pm10_delta),
+         pm25_delta = ifelse(event_length < 24, pm25_delta*event_length/24, pm25_delta),
          event_days = case_when(event_length < 24 ~ 1,
                                 event_length >= 24 ~ event_length/24),
   )
@@ -163,6 +163,6 @@ scenario_pm_deltas_event <- scenario_pm_deltas_hourly %>%
 #### Write data
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-write.csv(scenario_pm_deltas_daily, file = "processed/scenario_pm_deltas_daily.csv", row.names = FALSE)
+#write.csv(scenario_pm_deltas_daily, file = "processed/scenario_pm_deltas_daily.csv", row.names = FALSE)
 write.csv(scenario_pm_deltas_event, file = "processed/scenario_pm_deltas_event.csv", row.names = FALSE)
 

@@ -48,9 +48,9 @@ palette <- list("white" = "#FAFAFA",
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281) # note, excludes 1282 baseline
+relevant_scenarios <- c(1275, 1278, 1280, 1281) # note, excludes 1282 baseline
 
-scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1278, palette$sc1280, palette$sc1281)
+scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
 n_storms_annual = 3
@@ -96,8 +96,8 @@ ct_mortality_projections <- ct_projections %>%
          mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          mortality = mortality_pm10 + mortality_pm25,
-         FV_costs_VSL = mortality*VSL_24,
-         PV_costs_VSL = FV_costs_VSL/(1+0.03)^(Year - 2024)
+         costs_VSL = mortality*VSL_24,
+         PV_costs_VSL = costs_VSL/(1+0.03)^(Year - 2024)
          )%>%
   drop_na(scenario)
 
@@ -105,17 +105,23 @@ ct_mortality_projections <- ct_projections %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Total overall mortality
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 total_mortality_projections <- ct_mortality_projections %>%
   group_by(scenario, Year) %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
-            costs_VSL = sum(PV_costs_VSL, na.rm = T))%>%
+            costs_VSL = sum(costs_VSL, na.rm = T),
+            PV_costs_VSL = sum(PV_costs_VSL, na.rm = T))%>%
   ungroup %>%
   group_by(scenario) %>%
-  mutate(PV_cum_costs = cumsum(costs_VSL),
-         cum_mortality = cumsum(mortality))
+  mutate(PV_cum_costs_VSL = cumsum(PV_costs_VSL),
+         cum_costs_VSL = cumsum(costs_VSL),
+         cum_mortality = cumsum(mortality))%>%
+  ungroup
   
+write.csv(total_mortality_projections, file = "processed/total_mortality_projections.csv", row.names = FALSE)
+
 # 
 # total_mortality_projections_relative <- total_mortality_projections %>%
 #   left_join(total_mortality_projections %>%
@@ -145,7 +151,7 @@ mortality_proj_annual <- total_mortality_projections %>%
                      limits = c(0, 9),
                      breaks = seq(0, 10, by = 2)
                     ) +
-  ggtitle("Annual all-cause mortality (2025-2060)")+
+  ggtitle("Annual dust-induced mortality (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
   theme_cowplot(14)+
   theme(legend.position = "bottom",
@@ -162,10 +168,10 @@ mortality_proj <- total_mortality_projections %>%
   geom_line()+
   geom_point(size = 1.5)+
   scale_y_continuous(name = "Cumulative premature mortality",
-                     limits = c(0, 250),
+                     #limits = c(0, 250),
                      breaks = seq(0, 250, by = 50)
                      ) +
-  ggtitle("Projected mortality (2025-2060)")+
+  ggtitle("Projected dust-induced mortality (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
   theme_cowplot(16)+
   theme(legend.position = "bottom",

@@ -46,9 +46,9 @@ palette <- list("white" = "#FAFAFA",
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
-relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281) 
+relevant_scenarios <- c(1275, 1278, 1280, 1281) 
 
-scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1278, palette$sc1280, palette$sc1281)
+scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
 n_storms_annual = 3
@@ -143,16 +143,17 @@ ct_mortality <- ct_mortality_age %>%
             mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
-            pop = sum(pop, na.rm = T),
+            population = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),
-            costs_age_VSL = sum(costs_age_VSL, na.rm = T))%>%
+            costs_age_VSL = sum(costs_age_VSL, na.rm = T),
+            ct_incidence_rate_annual = weighted.mean(incidence_rate,pop)
+            )%>%
   ungroup %>%
   mutate(mortality_exposure_ratio = mortality/pm_delta)
 
 
 write.csv(ct_mortality, file = "processed/ct_mortality.csv", row.names = FALSE)
-write.csv(ct_mortality %>% filter(endpoint == "Mortality, All-cause")
-            , file = "processed/ct_mortality_all-cause.csv", row.names = FALSE)
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Total overall mortality
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -206,8 +207,6 @@ mortality_costs_plot <- mortality_costs_plot_prep %>%
   guides(fill = guide_legend(title = NULL, reverse=T, hjust = 0.5))
 mortality_costs_plot
 
-
-
 all_cause_costs <- total_mortality %>%
   filter(scenario %in% relevant_scenarios,
          endpoint == "Mortality, All-cause"
@@ -237,6 +236,37 @@ ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_VSL, fill = as.char
         axis.title.x = element_blank())+
   guides(fill = guide_legend(title.position="top", title.hjust = 0.5))
 all_cause_costs
+
+all_cause_mort <- total_mortality %>%
+  filter(scenario %in% relevant_scenarios,
+         endpoint == "Mortality, All-cause"
+  )%>%
+  ggplot(aes(x=reorder(scenario, scenario, order = T), y=mortality, fill = as.character(scenario))
+  )+
+  #geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), color = palette$dark)+
+  geom_bar(stat='identity')+
+  geom_hline(yintercept = 0, linewidth = 0.25)+
+  scale_y_continuous(
+    "Expected premature mortalities", 
+    limits = c(0,3)
+    # sec.axis = sec_axis(~ . / VSL_24, 
+    #                     name = "Expected mortalities"
+    #                     , breaks = seq(-0, 10, by = 1)
+    # )
+  )+
+  #geom_text(aes(label=round(costs_VSL, 2), y=costs_VSL+(VSL_24/abs(max(mortality))))
+            #, fontface='bold'
+  #) +
+  #xlab("GSL water level (mASL)")+
+  scale_fill_manual(values = scenario_pal, name = "GSL water level (mASL)")+
+  theme_cowplot(16)+
+  theme(legend.position = "top",
+        legend.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank())+
+  guides(fill = guide_legend(title.position="top", title.hjust = 0.5))
+all_cause_mort
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Alternate VSL comparison
 total_mortality %>%
@@ -269,7 +299,7 @@ ggsave("figs/mortality_by_VSL.png", width = 8, height = 6)
 
 county_mortality <- ct_mortality_age %>%
   group_by(scenario, County, endpoint) %>%
-  summarise(pop = sum(pop, na.rm = T),
+  summarise(pop = sum(pop, na.rm = T)/length(unique(event)),
             mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
@@ -301,7 +331,7 @@ mortality_age <- ct_mortality_age %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
-            pop = sum(pop, na.rm = T),
+            pop = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T))%>%
   ungroup
@@ -356,7 +386,7 @@ ct_mortality_agebyrace <- ct_mortality_pollution_race %>%
 ct_mortality_race <- ct_mortality_agebyrace %>%
   group_by(scenario, FIPS, County, race, endpoint) %>%
   summarise(mortality = sum(mortality, na.rm = T),
-            pop = sum(pop, na.rm = T),
+            population = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T))%>%
   ungroup
@@ -368,13 +398,13 @@ total_mortality_race <- ct_mortality_agebyrace %>%
   summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
             mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
-            pop = sum(pop, na.rm = T),
+            population = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T)
             )%>%
-  mutate(mortality_per_100k = mortality/pop*100000,
-         cost_per_capita = costs_VSL/pop,
-         age_cost_per_capita = costs_age_VSL/pop
+  mutate(mortality_per_100k = mortality/population*100000,
+         cost_per_capita = costs_VSL/population,
+         age_cost_per_capita = costs_age_VSL/population
          )%>%
   ungroup %>%
   filter(race %in% c(
@@ -384,9 +414,9 @@ total_mortality_race <- ct_mortality_agebyrace %>%
 
 mortality_race <- total_mortality_race %>%
 ggplot(aes(x=scenario, color = reorder(race, -mortality_per_100k), y=mortality_per_100k))+
-  geom_line(linewidth = 0.85)+
+  geom_line(linewidth = 1)+
   geom_point(data = total_mortality_race %>% filter(scenario %in% relevant_scenarios)
-             , size = 2)+
+             , size = 2.5)+
   # ggtitle("Distribution of mortality risk across race")+
   scale_y_continuous(name = paste("Premature mortality (per 100k)"),
                      limits = c(0, max(total_mortality_race$mortality_per_100k))
@@ -409,5 +439,19 @@ ggplot(aes(x=scenario, color = reorder(race, -mortality_per_100k), y=mortality_p
 mortality_race
 
 ggsave("figs/mortality_by_race.png", 
-       width = 12, height = 7)
+       width = 8, height = 5)
 
+
+ct_mortality_map <- ct_mortality_agebyrace %>%
+  group_by(scenario, FIPS, County, endpoint) %>%
+  summarise(pm_delta = sum(pm_delta, na.rm = T),
+            mortality_pm10 = sum(mortality_pm10, na.rm = T),
+            mortality_pm25 = sum(mortality_pm25, na.rm = T),
+            mortality = sum(mortality, na.rm = T),
+            population = sum(pop, na.rm = T)/length(unique(event)),
+            costs_VSL = sum(costs_VSL, na.rm = T),
+            costs_age_VSL = sum(costs_age_VSL, na.rm = T),
+            ct_incidence_rate_annual = weighted.mean(incidence_rate,pop)
+  )%>%
+  ungroup
+write.csv(ct_mortality_map, file = "processed/ct_mortality_map.csv", row.names = FALSE)
