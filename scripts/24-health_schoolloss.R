@@ -34,9 +34,9 @@ palette <- list("white" = "#FAFAFA",
                 "green" = "#66c2a5",
                 "purple" = "#8da0cb",
                 "sc1275" = "#d7191c",
-                "sc1277" = "#fdae61",
-                "sc1278" = 
-                  "grey50", 
+                "sc1278" = "#fdae61",
+                #"sc1278" = 
+                #  "grey50", 
                 #"#ffd93f", 
                 "sc1280" = "#abd9e9",
                 "sc1281" = "#2c7bb6"
@@ -46,9 +46,10 @@ palette <- list("white" = "#FAFAFA",
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
+current_scenario = 1278
 relevant_scenarios <- c(1275, 1278, 1280, 1281) 
 
-scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1280, palette$sc1281)
+scenario_pal <- c(palette$sc1275, palette$sc1278, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
 n_storms_annual = 3
@@ -84,36 +85,81 @@ beta_pm25 <- log(RR_pm25)/10
 
 beta_pm10 <- 2.5/100/10
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Getting impacts
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-ct_schoolloss <- ct_school_pollution %>%
+ct_schoolloss_temp <- ct_school_pollution %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
+         pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
+         pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
          SLD_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          SLD_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          SLD = SLD_pm10 + SLD_pm25,
          pm_delta = pm10_delta + pm25_delta,
-         costs_SLD = SLD*SLD_24,
          endpoint = "School Loss Days"
   )%>%
   drop_na(scenario)
 
-ct_schoolloss_race <- ct_school_pollution_race %>%
+#### Get overall impacts, not just relative
+ct_schoolloss_current <- ct_schoolloss_temp %>%
+  filter(scenario == current_scenario) %>%
+  rename(current_SLD = SLD,
+         current_pm_delta = pm_delta) %>%
+  select(FIPS, County, event, age_group, lower_age, upper_age, endpoint, current_SLD, current_pm_delta)
+
+ct_schoolloss <- ct_schoolloss_temp %>%
+  left_join(ct_schoolloss_current, by = c("FIPS", "County", "event", "age_group", "lower_age", "upper_age", "endpoint"))%>%
+  mutate(relative_SLD = ifelse(scenario == current_scenario, 0, SLD),
+         SLD = relative_SLD + current_SLD,
+         relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
+         pm_delta = relative_pm_delta + current_pm_delta,
+         costs_SLD = SLD*SLD_24) %>%
+  select(FIPS, County, scenario, event, age_group, lower_age, upper_age, pop, pm_delta, endpoint, SLD, costs_SLD)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Getting impacts disaggregated by race
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+ct_schoolloss_race_temp <- ct_school_pollution_race %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
+         pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
+         pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
          SLD_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          SLD_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          SLD = SLD_pm10 + SLD_pm25,
          pm_delta = pm10_delta + pm25_delta,
-         costs_SLD = SLD*SLD_24,
          endpoint = "School Loss Days"
   )%>%
   drop_na(scenario)
 
+#### Get overall impacts, not just relative
+ct_schoolloss_race_current <- ct_schoolloss_race_temp %>%
+  filter(scenario == current_scenario) %>%
+  rename(current_SLD = SLD,
+         current_pm_delta = pm_delta) %>%
+  select(FIPS, County, event, Race, age_group, lower_age, upper_age, endpoint, current_SLD, current_pm_delta)
+
+ct_schoolloss_race <- ct_schoolloss_race_temp %>%
+  left_join(ct_schoolloss_race_current, by = c("FIPS", "County", "event", "Race", "age_group", "lower_age", "upper_age", "endpoint"))%>%
+  mutate(relative_SLD = ifelse(scenario == current_scenario, 0, SLD),
+         SLD = relative_SLD + current_SLD,
+         relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
+         pm_delta = relative_pm_delta + current_pm_delta,
+         costs_SLD = SLD*SLD_24) %>%
+  select(FIPS, County, scenario, event, Race, age_group, lower_age, upper_age, pop, pm_delta, endpoint, SLD, costs_SLD)
+
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Aggregating to relevant scales
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 total_schoolloss <- ct_schoolloss %>%
   group_by(scenario, endpoint) %>%
-  summarise(SLD_pm10 = sum(SLD_pm10, na.rm = T),
-            SLD_pm25 = sum(SLD_pm25, na.rm = T),
-            SLD = sum(SLD, na.rm = T),
+  summarise(SLD = sum(SLD, na.rm = T),
             costs_SLD = sum(costs_SLD, na.rm = T)/1000000,
             pop = sum(pop, na.rm = T)/length(unique(event))
   )%>%
@@ -185,9 +231,7 @@ total_schoolloss_race <- ct_schoolloss_race %>%
   drop_na(Race) %>%
   filter(Race %ni% c("Other Race", "Multiple Race", "American Indian"))%>%
   group_by(scenario, endpoint, Race) %>%
-  summarise(SLD_pm10 = sum(SLD_pm10, na.rm = T),
-            SLD_pm25 = sum(SLD_pm25, na.rm = T),
-            SLD = sum(SLD, na.rm = T),
+  summarise(SLD = sum(SLD, na.rm = T),
             costs_SLD = sum(costs_SLD, na.rm = T),
             pop = sum(pop, na.rm = T)/length(unique(event))
   )%>%

@@ -34,9 +34,9 @@ palette <- list("white" = "#FAFAFA",
                 "green" = "#66c2a5",
                 "purple" = "#8da0cb",
                 "sc1275" = "#d7191c",
-                "sc1277" = "#fdae61",
-                "sc1278" = 
-                  "grey50", 
+                "sc1278" = "#fdae61",
+                #"sc1278" = 
+                #  "grey50", 
                 #"#ffd93f", 
                 "sc1280" = "#abd9e9",
                 "sc1281" = "#2c7bb6"
@@ -45,10 +45,11 @@ palette <- list("white" = "#FAFAFA",
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
+current_scenario = 1278
+relevant_scenarios <- c(1275, 1278, 1280, 1281) 
 
-relevant_scenarios <- c(1275, 1277, 1278, 1280, 1281) # note, excludes 1282 baseline
-
-scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1278, palette$sc1280, palette$sc1281)
+scenario_pal <- c(palette$sc1275, palette$sc1278, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
 n_storms_annual = 3
@@ -72,40 +73,56 @@ ct_morbidity_pollution <- ct_incidence_morbidity %>%
   mutate(incidence_rate_event = value*event_days) # incidence rates are already daily for morbidity
 
 
-ct_morbidity_age <- ct_morbidity_pollution %>%
-  mutate(morbidity_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-         morbidity_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-         morbidity = morbidity_pm10 + morbidity_pm25)%>%
-  drop_na(scenario)
+# ct_morbidity_age <- ct_morbidity_pollution %>%
+#   mutate(morbidity_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+#          morbidity_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+#          morbidity = morbidity_pm10 + morbidity_pm25)%>%
+#   drop_na(scenario)
 
 # total morbidity by census tract and endpoint
-ct_morbidity <- ct_morbidity_age %>%
-  group_by(scenario, FIPS, County, endpoint) %>%
-  summarise(morbidity_pm10 = sum(morbidity_pm10, na.rm = T),
-            morbidity_pm25 = sum(morbidity_pm25, na.rm = T),
-            morbidity = sum(morbidity, na.rm = T))%>%
-  ungroup
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Getting impacts
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ct_morbidity_age_temp <- ct_morbidity_pollution %>%
+  mutate(pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
+         pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
+         morbidity_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+         morbidity_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+         morbidity = morbidity_pm10 + morbidity_pm25,
+         pm_delta = pm10_delta + pm25_delta
+  )%>%
+  drop_na(scenario)
+
+#### Get overall impacts, not just relative
+ct_morbidity_age_current <- ct_morbidity_age_temp %>%
+  filter(scenario == current_scenario) %>%
+  rename(current_morbidity = morbidity,
+         current_pm_delta = pm_delta) %>%
+  select(FIPS, County, event, age_group, endpoint, current_morbidity, current_pm_delta)
+
+ct_morbidity_age <- ct_morbidity_age_temp %>%
+  left_join(ct_morbidity_age_current, by = c("FIPS", "County", "event", "age_group", "endpoint"))%>%
+  mutate(relative_morbidity = ifelse(scenario == current_scenario, 0, morbidity),
+         morbidity = relative_morbidity + current_morbidity,
+         relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
+         pm_delta = relative_pm_delta + current_pm_delta
+         ) %>%
+  select(FIPS, County, scenario, event, age_group, pop, pm_delta, endpoint, morbidity)
+
+# ct_morbidity <- ct_morbidity_age %>%
+#   group_by(scenario, FIPS, County, endpoint) %>%
+#   summarise(morbidity = sum(morbidity, na.rm = T))%>%
+#   ungroup
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Totals morbidity
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 total_morbidity <- ct_morbidity_age %>%
   group_by(scenario, endpoint) %>%
-  summarise(morbidity_pm10 = sum(morbidity_pm10, na.rm = T),
-            morbidity_pm25 = sum(morbidity_pm25, na.rm = T),
-            morbidity = sum(morbidity, na.rm = T))%>%
+  summarise(morbidity = sum(morbidity, na.rm = T))%>%
   ungroup
 
-# how many students: 5 to 17
-student_population <- ct_morbidity_age %>%
-  filter(age_group %in% c("5 to 9", "10 to 14", "14 to 17"),
-         endpoint == "School Loss Days") %>%
-  group_by(scenario, endpoint) %>%
-  summarise(morbidity_pm10 = sum(morbidity_pm10, na.rm = T),
-            morbidity_pm25 = sum(morbidity_pm25, na.rm = T),
-            morbidity = sum(morbidity, na.rm = T),
-            pop = sum(pop, na.rm = T)/length(unique(event)),
-            rate = morbidity/pop
-            )%>%
-  ungroup
+

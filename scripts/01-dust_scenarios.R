@@ -28,7 +28,7 @@ options(java.parameters = "-Xmx8000m")
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 baseline_scenario = 1282
-
+current_scenario = 1278
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### load csvs
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -151,6 +151,7 @@ scenario_pm_deltas_event <- scenario_pm_deltas_hourly %>%
   group_by(scenario, event, FIPS) %>%
   summarise(pm10_delta = mean(pm10_delta),
             pm25_delta = mean(pm25_delta))%>%
+  ungroup %>%
   mutate(event_length = case_when(event == "04" ~ event_1_length,
                                   event == "05" ~ event_2_length),
          pm10_delta = ifelse(event_length < 24, pm10_delta*event_length/24, pm10_delta),
@@ -158,6 +159,22 @@ scenario_pm_deltas_event <- scenario_pm_deltas_hourly %>%
          event_days = case_when(event_length < 24 ~ 1,
                                 event_length >= 24 ~ event_length/24),
   )
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Get "current" and "relative" deltas
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+current_pm_deltas_event <- scenario_pm_deltas_event %>%
+  filter(scenario == current_scenario) %>%
+  rename(baseline_pm10_delta = pm10_delta,
+         baseline_pm25_delta = pm25_delta)%>%
+  select(event, FIPS, baseline_pm10_delta, baseline_pm25_delta)
+
+scenario_pm_deltas_event <- scenario_pm_deltas_event %>%
+  left_join(current_pm_deltas_event, by = c("event", "FIPS"))%>%
+  mutate(relative_pm10_delta = pm10_delta - baseline_pm10_delta,
+         relative_pm25_delta = pm25_delta - baseline_pm25_delta)
+
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Write data

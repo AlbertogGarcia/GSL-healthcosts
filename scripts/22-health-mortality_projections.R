@@ -38,8 +38,8 @@ palette <- list("white" = "#FAFAFA",
                 "green" = "#66c2a5",
                 "purple" = "#8da0cb",
                 "sc1275" = "#d7191c",
-                "sc1277" = "#fdae61",
-                "sc1278" = "grey50", 
+                "sc1278" = "#fdae61",
+               # "sc1278" = "grey50", 
                 "sc1280" = "#abd9e9",
                 "sc1281" = "#2c7bb6"
 )
@@ -48,9 +48,11 @@ palette <- list("white" = "#FAFAFA",
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-relevant_scenarios <- c(1275, 1278, 1280, 1281) # note, excludes 1282 baseline
+all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
+current_scenario = 1278
+relevant_scenarios <- c(1275, 1278, 1280, 1281) 
 
-scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1280, palette$sc1281)
+scenario_pal <- c(palette$sc1275, palette$sc1278, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
 n_storms_annual = 3
@@ -91,15 +93,54 @@ RR_pm10 = 1.0041
 beta_pm10 <- log(RR_pm10)/10
 
 #Mortality impact
-ct_mortality_projections <- ct_projections %>%
+ct_mortality_projections_temp <- ct_projections %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
+         pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
+         pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
          mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          mortality = mortality_pm10 + mortality_pm25,
-         costs_VSL = mortality*VSL_24,
-         PV_costs_VSL = costs_VSL/(1+0.03)^(Year - 2024)
-         )%>%
+         pm_delta = pm10_delta + pm25_delta)%>%
   drop_na(scenario)
+  # mutate(incidence_rate_event = incidence_rate_daily*event_days,
+  #        mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+  #        mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+  #        mortality = mortality_pm10 + mortality_pm25,
+  #        costs_VSL = mortality*VSL_24,
+  #        PV_costs_VSL = costs_VSL/(1+0.03)^(Year - 2024)
+  #        )%>%
+  # drop_na(scenario)
+
+#### Get overall impacts, not just relative
+ct_mortality_projections_current <- ct_mortality_projections_temp %>%
+  filter(scenario == current_scenario) %>%
+  rename(current_mortality = mortality,
+         current_pm_delta = pm_delta) %>%
+  select(FIPS, County, event, Year, age_group, lower_age, upper_age, endpoint, current_mortality, current_pm_delta)
+
+ct_mortality_projections <- ct_mortality_projections_temp %>%
+  left_join(ct_mortality_projections_current, by = c("FIPS", "County", "event", "Year", "age_group", "lower_age", "upper_age", "endpoint"))%>%
+  mutate(relative_mortality = ifelse(scenario == current_scenario, 0, mortality),
+         mortality = relative_mortality + current_mortality,
+         relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
+         pm_delta = relative_pm_delta + current_pm_delta,
+         costs_VSL = mortality*VSL_24,
+         PV_costs_VSL = costs_VSL/(1+0.03)^(Year - 2024)) %>%
+  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, mortality, costs_VSL, PV_costs_VSL)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -108,9 +149,7 @@ ct_mortality_projections <- ct_projections %>%
 
 total_mortality_projections <- ct_mortality_projections %>%
   group_by(scenario, Year) %>%
-  summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
-            mortality_pm25 = sum(mortality_pm25, na.rm = T),
-            mortality = sum(mortality, na.rm = T),
+  summarise(mortality = sum(mortality, na.rm = T),
             costs_VSL = sum(costs_VSL, na.rm = T),
             PV_costs_VSL = sum(PV_costs_VSL, na.rm = T))%>%
   ungroup %>%
@@ -182,12 +221,12 @@ mortality_proj
 
 
 costs_proj <- total_mortality_projections %>%
-  ggplot(aes(x = Year, y = PV_cum_costs, color = as.character(scenario)))+
+  ggplot(aes(x = Year, y = PV_cum_costs_VSL/1000, color = as.character(scenario)))+
   geom_line()+
   geom_point(size = 1.5)+
-  scale_y_continuous(name = "Cumulative mortality costs (millions USD)",
+  scale_y_continuous(name = "Cumulative mortality costs (billions USD)",
                     # limits = c(0, 500),
-                     breaks = seq(0, 2000, by = 250)
+                     breaks = seq(0, 2, by = .50)
                      ) +
   ggtitle("Present value of projected costs (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+

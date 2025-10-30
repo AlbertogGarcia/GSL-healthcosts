@@ -18,6 +18,7 @@ pacman::p_load(mapview,  # view spatial data in viewer
                tidyverse, # tidyverse
                stringr,
                fuzzyjoin,
+               cowplot,
                purrr,
                ggplot2
 )

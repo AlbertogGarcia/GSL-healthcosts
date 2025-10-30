@@ -34,9 +34,9 @@ palette <- list("white" = "#FAFAFA",
                 "green" = "#66c2a5",
                 "purple" = "#8da0cb",
                 "sc1275" = "#d7191c",
-                "sc1277" = "#fdae61",
-                "sc1278" = 
-                  "grey50", 
+                "sc1278" = "#fdae61",
+                #"sc1278" = 
+                #  "grey50", 
                 #"#ffd93f", 
                 "sc1280" = "#abd9e9",
                 "sc1281" = "#2c7bb6"
@@ -46,9 +46,10 @@ palette <- list("white" = "#FAFAFA",
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
+current_scenario = 1278
 relevant_scenarios <- c(1275, 1278, 1280, 1281) 
 
-scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1280, palette$sc1281)
+scenario_pal <- c(palette$sc1275, palette$sc1278, palette$sc1280, palette$sc1281)
 
 n_storms_data = 2
 n_storms_annual = 3
@@ -101,14 +102,14 @@ ct_mortality_pollution_race <- ct_incidence_mortality_race %>%
   left_join(age_VSL_2024_grouped_race, by = c("lower_age", "upper_age", "age_group"))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### Mortality impacts
+#### Mortality impacts - relative to current levels
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #Coefficients from Orellano et al., (2020)
 ###IMPORTANT: all are for a 10 microgram increase
 
 #Mortality impact
-ct_mortality_age <- ct_mortality_pollution %>%
+ct_mortality_age_temp <- ct_mortality_pollution %>%
   mutate(
     beta_pm10 = case_when(
       endpoint == "Mortality, All-cause" ~ log(1.0041)/10,
@@ -121,17 +122,34 @@ ct_mortality_age <- ct_mortality_pollution %>%
       endpoint == "Mortality, Cardiovascular" ~ log(1.0092)/10
       ),
     incidence_rate_event = incidence_rate_daily*event_days,
+    pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
+    pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
     mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
     mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
     mortality = mortality_pm10 + mortality_pm25,
-    pm_delta = pm10_delta + pm25_delta,
-    life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
-    costs_VSL = mortality*VSL_24,
-    costs_age_VSL = mortality*age_vsl_2024)%>%
+    pm_delta = pm10_delta + pm25_delta
+    #life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
+    )%>%
   drop_na(scenario)
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Get overall mortality impacts
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ct_mortality_age_current <- ct_mortality_age_temp %>%
+  filter(scenario == current_scenario) %>%
+  rename(current_mortality = mortality,
+         current_pm_delta = pm_delta) %>%
+  select(FIPS, County, event, age_group, lower_age, upper_age, endpoint, current_mortality, current_pm_delta)
 
-
+ct_mortality_age <- ct_mortality_age_temp %>%
+  left_join(ct_mortality_age_current, by = c("FIPS", "County", "event", "age_group", "lower_age", "upper_age", "endpoint"))%>%
+  mutate(relative_mortality = ifelse(scenario == current_scenario, 0, mortality),
+         mortality = relative_mortality + current_mortality,
+         relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
+         pm_delta = relative_pm_delta + current_pm_delta,
+         costs_VSL = mortality*VSL_24,
+         costs_age_VSL = mortality*age_vsl_2024) %>%
+  select(FIPS, County, scenario, event, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, mortality, costs_VSL, costs_age_VSL)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Create data for analyses
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -139,14 +157,12 @@ ct_mortality_age <- ct_mortality_pollution %>%
 # total mortality by census tract
 ct_mortality <- ct_mortality_age %>%
   group_by(scenario, FIPS, County, endpoint) %>%
-  summarise(pm_delta = sum(pm_delta, na.rm = T),
-            mortality_pm10 = sum(mortality_pm10, na.rm = T),
-            mortality_pm25 = sum(mortality_pm25, na.rm = T),
+  summarise(pm_delta = weighted.mean(pm_delta, pop, na.rm = T),
             mortality = sum(mortality, na.rm = T),
             population = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T),
-            ct_incidence_rate_annual = weighted.mean(incidence_rate,pop)
+            ct_incidence_rate_annual = weighted.mean(incidence_rate, pop, na.rm = T)
             )%>%
   ungroup %>%
   mutate(mortality_exposure_ratio = mortality/pm_delta)
@@ -159,9 +175,7 @@ write.csv(ct_mortality, file = "processed/ct_mortality.csv", row.names = FALSE)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 total_mortality <- ct_mortality_age %>%
   group_by(scenario, endpoint) %>%
-  summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
-            mortality_pm25 = sum(mortality_pm25, na.rm = T),
-            mortality = sum(mortality, na.rm = T),
+  summarise(mortality = sum(mortality, na.rm = T),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T)
   )%>%
@@ -300,8 +314,6 @@ ggsave("figs/mortality_by_VSL.png", width = 8, height = 6)
 county_mortality <- ct_mortality_age %>%
   group_by(scenario, County, endpoint) %>%
   summarise(pop = sum(pop, na.rm = T)/length(unique(event)),
-            mortality_pm10 = sum(mortality_pm10, na.rm = T),
-            mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T))%>%
@@ -328,9 +340,7 @@ county_mortality %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 mortality_age <- ct_mortality_age %>%
   group_by(scenario, age_group, lower_age, upper_age, endpoint) %>%
-  summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
-            mortality_pm25 = sum(mortality_pm25, na.rm = T),
-            mortality = sum(mortality, na.rm = T),
+  summarise(mortality = sum(mortality, na.rm = T),
             pop = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T))%>%
@@ -370,19 +380,37 @@ RR_pm10 = 1.0041
 beta_pm10 <- log(RR_pm10)/10
 
 #Mortality impact
-ct_mortality_agebyrace <- ct_mortality_pollution_race %>%
+ct_mortality_agebyrace_temp <- ct_mortality_pollution_race %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
+         pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
+         pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
          mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
          mortality = mortality_pm10 + mortality_pm25,
-         pm_delta = pm10_delta + pm25_delta,
-         life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
-         costs_VSL = mortality*VSL_24,
-         costs_age_VSL = mortality*age_vsl_2024,
-         endpoint = "Mortality, All-cause"
-  )%>%
+         pm_delta = pm10_delta + pm25_delta)%>%
   drop_na(scenario)
 
+
+#### Get overall impacts, not just relative
+ct_mortality_agebyrace_current <- ct_mortality_agebyrace_temp %>%
+  filter(scenario == current_scenario) %>%
+  rename(current_mortality = mortality,
+         current_pm_delta = pm_delta) %>%
+  select(FIPS, County, event, race, age_group, lower_age, upper_age, endpoint, current_mortality, current_pm_delta)
+
+ct_mortality_agebyrace <- ct_mortality_agebyrace_temp %>%
+  left_join(ct_mortality_agebyrace_current, by = c("FIPS", "County", "event", "race", "age_group", "lower_age", "upper_age", "endpoint"))%>%
+  mutate(relative_mortality = ifelse(scenario == current_scenario, 0, mortality),
+         mortality = relative_mortality + current_mortality,
+         relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
+         pm_delta = relative_pm_delta + current_pm_delta,
+         costs_VSL = mortality*VSL_24,
+         costs_age_VSL = mortality*age_vsl_2024) %>%
+  select(FIPS, County, scenario, event, race, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, mortality, costs_VSL, costs_age_VSL)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Aggregate to relevant scales
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ct_mortality_race <- ct_mortality_agebyrace %>%
   group_by(scenario, FIPS, County, race, endpoint) %>%
   summarise(mortality = sum(mortality, na.rm = T),
@@ -395,9 +423,7 @@ write.csv(ct_mortality_race, file = "processed/ct_mortality_race.csv", row.names
 
 total_mortality_race <- ct_mortality_agebyrace %>%
   group_by(scenario, race) %>%
-  summarise(mortality_pm10 = sum(mortality_pm10, na.rm = T),
-            mortality_pm25 = sum(mortality_pm25, na.rm = T),
-            mortality = sum(mortality, na.rm = T),
+  summarise(mortality = sum(mortality, na.rm = T),
             population = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T)
@@ -445,8 +471,6 @@ ggsave("figs/mortality_by_race.png",
 ct_mortality_map <- ct_mortality_agebyrace %>%
   group_by(scenario, FIPS, County, endpoint) %>%
   summarise(pm_delta = sum(pm_delta, na.rm = T),
-            mortality_pm10 = sum(mortality_pm10, na.rm = T),
-            mortality_pm25 = sum(mortality_pm25, na.rm = T),
             mortality = sum(mortality, na.rm = T),
             population = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),
