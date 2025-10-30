@@ -102,14 +102,6 @@ ct_mortality_projections_temp <- ct_projections %>%
          mortality = mortality_pm10 + mortality_pm25,
          pm_delta = pm10_delta + pm25_delta)%>%
   drop_na(scenario)
-  # mutate(incidence_rate_event = incidence_rate_daily*event_days,
-  #        mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-  #        mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-  #        mortality = mortality_pm10 + mortality_pm25,
-  #        costs_VSL = mortality*VSL_24,
-  #        PV_costs_VSL = costs_VSL/(1+0.03)^(Year - 2024)
-  #        )%>%
-  # drop_na(scenario)
 
 #### Get overall impacts, not just relative
 ct_mortality_projections_current <- ct_mortality_projections_temp %>%
@@ -127,20 +119,6 @@ ct_mortality_projections <- ct_mortality_projections_temp %>%
          costs_VSL = mortality*VSL_24,
          PV_costs_VSL = costs_VSL/(1+0.03)^(Year - 2024)) %>%
   select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, mortality, costs_VSL, PV_costs_VSL)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
