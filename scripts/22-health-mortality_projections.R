@@ -75,9 +75,16 @@ scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas_event.csv", strings
 #2 Population and incidence
 ct_incidence_projections <- read.csv("processed/ct_incidence_projections.csv", stringsAsFactors =  FALSE)
 
+#3 Projected VSL
+health_valuations_projected <- read.csv("processed/health_valuations_projected.csv", stringsAsFactors =  FALSE)
+
+
 #Merge w/ pollution deltas 
 ct_projections <- ct_incidence_projections %>%
-  left_join(scenario_pm_deltas, by = "FIPS", relationship = "many-to-many")
+  left_join(scenario_pm_deltas, by = "FIPS", relationship = "many-to-many")%>%
+  left_join(health_valuations_projected, by = "Year") %>%
+  filter(Year >= 2025)
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -116,9 +123,8 @@ ct_mortality_projections <- ct_mortality_projections_temp %>%
          mortality = relative_mortality + current_mortality,
          relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
          pm_delta = relative_pm_delta + current_pm_delta,
-         costs_VSL = mortality*VSL_24,
-         PV_costs_VSL = costs_VSL/(1+0.03)^(Year - 2024)) %>%
-  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, mortality, costs_VSL, PV_costs_VSL)
+         PV_costs_VSL = (mortality*VSL_proj)/(1+0.03)^(Year - 2024)) %>%
+  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, mortality, PV_costs_VSL)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -128,12 +134,10 @@ ct_mortality_projections <- ct_mortality_projections_temp %>%
 total_mortality_projections <- ct_mortality_projections %>%
   group_by(scenario, Year) %>%
   summarise(mortality = sum(mortality, na.rm = T),
-            costs_VSL = sum(costs_VSL, na.rm = T),
             PV_costs_VSL = sum(PV_costs_VSL, na.rm = T))%>%
   ungroup %>%
   group_by(scenario) %>%
   mutate(PV_cum_costs_VSL = cumsum(PV_costs_VSL),
-         cum_costs_VSL = cumsum(costs_VSL),
          cum_mortality = cumsum(mortality))%>%
   ungroup
   
@@ -204,7 +208,7 @@ costs_proj <- total_mortality_projections %>%
   geom_point(size = 1.5)+
   scale_y_continuous(name = "Cumulative mortality costs (billions USD)",
                     # limits = c(0, 500),
-                     breaks = seq(0, 2, by = .50)
+                     breaks = seq(0, 2.5, by = .50)
                      ) +
   ggtitle("Present value of projected costs (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+

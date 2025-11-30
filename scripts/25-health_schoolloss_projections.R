@@ -53,9 +53,6 @@ scenario_pal <- c(palette$sc1275, palette$sc1278, palette$sc1280, palette$sc1281
 n_storms_data = 2
 n_storms_annual = 3
 
-# cost of a school loss day
-SLD_24 = 1673.504
-
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Load and merge processed data
@@ -68,9 +65,14 @@ scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas_event.csv", strings
 #2 Population and incidence projections
 ct_school_projections <- read.csv("processed/ct_school_projections.csv", stringsAsFactors =  FALSE)
 
+#3 Projected VSL
+health_valuations_projected <- read.csv("processed/health_valuations_projected.csv", stringsAsFactors =  FALSE)
+
 #Merge w/ pollution deltas 
 ct_school_pollution <- ct_school_projections %>%
-  right_join(scenario_pm_deltas, by = "FIPS")
+  right_join(scenario_pm_deltas, by = "FIPS") %>%
+  left_join(health_valuations_projected, by = "Year") %>%
+  filter(Year >= 2025)
 
 
 
@@ -79,8 +81,6 @@ RR_pm25 = 1.02
 beta_pm25 <- log(RR_pm25)/10
 
 beta_pm10 <- 2.5/100/10
-
-
 
 ct_schoolloss_projections_temp <- ct_school_pollution %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
@@ -107,10 +107,9 @@ ct_schoolloss_projections <- ct_schoolloss_projections_temp %>%
          SLD = relative_SLD + current_SLD,
          relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
          pm_delta = relative_pm_delta + current_pm_delta,
-         costs_SLD = SLD*SLD_24,
-         PV_costs_SLD = costs_SLD/(1+0.03)^(Year - 2024)
+         PV_costs_SLD = (SLD*SLD_proj)/(1+0.03)^(Year - 2024)
          ) %>%
-  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, pop, pm_delta, endpoint, SLD, costs_SLD, PV_costs_SLD)
+  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, pop, pm_delta, endpoint, SLD, PV_costs_SLD)
 
 
 
@@ -121,13 +120,11 @@ ct_schoolloss_projections <- ct_schoolloss_projections_temp %>%
 total_schoolloss_projections <- ct_schoolloss_projections %>%
   group_by(scenario, Year) %>%
   summarise(SLD = sum(SLD, na.rm = T),
-            costs_SLD = sum(costs_SLD, na.rm = T)/1000000,
             PV_costs_SLD = sum(PV_costs_SLD, na.rm = T)/1000000
   )%>%
   ungroup %>%
   group_by(scenario) %>%
   mutate(PV_cum_costs_SLD = cumsum(PV_costs_SLD),
-         cum_costs_SLD = cumsum(costs_SLD),
          cum_SLD = cumsum(SLD))%>%
   ungroup
 

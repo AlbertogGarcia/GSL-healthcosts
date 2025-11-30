@@ -45,7 +45,8 @@ growth_GDPpc_1524 <- growth_rates %>% filter(year == 2024) %>% select(cum_growth
 # EPA cost of school loss day in 2015 $
 SLD_2015 <- 1186
 
-income_elasticity_child <- 0.4
+income_elasticity <- 0.4
 
-SLD_2024 = SLD_2015*CPI_1524*growth_GDPpc_1524^income_elasticity_child
+SLD_2024 = SLD_2015*CPI_1524*growth_GDPpc_1524^income_elasticity
 SLD_2024
+

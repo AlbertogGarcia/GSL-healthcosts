@@ -77,8 +77,7 @@ total_projections <- total_mortality_projections %>%
   ungroup %>%
   filter(scenario %in% relevant_scenarios)%>%
   full_join(total_schoolloss_projections, by = c("scenario", "Year"))%>%
-  mutate(PV_cum_costs = PV_cum_costs_VSL + PV_cum_costs_SLD,
-         cum_costs = cum_costs_VSL + cum_costs_SLD
+  mutate(PV_cum_costs = PV_cum_costs_VSL + PV_cum_costs_SLD
          )
 
 
@@ -87,7 +86,7 @@ total_projections <- total_mortality_projections %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 costs_proj <- total_projections %>%
-  ggplot(aes(x = Year, y = cum_costs/1000, color = as.character(scenario)))+
+  ggplot(aes(x = Year, y = PV_cum_costs/1000, color = as.character(scenario)))+
   geom_line()+
   geom_point(size = 1.5)+
   scale_y_continuous(name = "Cumulative costs (billions USD)",

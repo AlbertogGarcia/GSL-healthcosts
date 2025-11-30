@@ -106,7 +106,6 @@ incidence_BenMap_additional <- expand_grid("age_group" = unique(ct_ACS_age$age_g
     county != "Salt Lake" & lower_age >= 18 & upper_age > 64 ~ 0.00000133
     ),
     `Stroke` = ifelse(lower_age >= 65, 0.00446, 0),
-    #`School Loss Days` = ifelse(upper_age < 18 & lower_age >= 5, 9.9/365, 0),
     `Work Loss Days` = case_when(
       age_group %in% c("18 to 19", "20 to 24") ~ 0.00540,
       lower_age >= 25 & upper_age <= 44 ~ 0.00678,
