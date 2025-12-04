@@ -110,7 +110,7 @@ incidence_BenMap_additional <- expand_grid("age_group" = unique(ct_ACS_age$age_g
       age_group %in% c("18 to 19", "20 to 24") ~ 0.00540,
       lower_age >= 25 & upper_age <= 44 ~ 0.00678,
       lower_age >= 45 & upper_age <= 64 ~ 0.00492,
-      upper_age < 18 | upper_age > 64 ~ 0,
+      upper_age < 18 | lower_age > 64 ~ 0,
     )
   )%>%
   rename(end.age = upper_age,
@@ -132,7 +132,14 @@ morbidity_parameters <- read_excel("data/health/morbidity_parameters.xlsx") %>%
 #####Fuzzy join (of incidence to pop)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-relevant_endpoints <- unique(morbidity_parameters$endpoint)
+relevant_endpoints <- c("HA, All Respiratory",
+                        "HA, All Cardiac Outcomes",
+                        "HA, Stroke",
+                        "ER visits, All Respiratory",
+                        "ER visits, All Cardiac Outcomes",
+                       # "Emergency Room Visits, Asthma",
+                        "Work Loss Days"
+                        )
 
 ct_incidence_ut <- data.frame()
 
@@ -175,9 +182,10 @@ for(i in relevant_endpoints){
            upper_age = coalesce(upper_age.x,upper_age.y)) %>%
     select(-lower_age.x, -lower_age.y, -upper_age.x, -upper_age.y)%>%
     mutate(beta = case_when(
+      parameter == "beta" ~ parameter_value,
       parameter == "RR" ~ log(parameter_value)/dose,
       parameter == "OR" ~ log((parameter_value / (1 - value + (value*parameter_value))))/dose,
-      parameter == "pct" ~ parameter_value/100/dose
+      parameter == "HR" ~ log(((1-(1-value)^parameter_value)/value))/dose
     ))%>%
     drop_na(beta) %>%
     select(-c(parameter:dose))%>%

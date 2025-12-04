@@ -21,7 +21,8 @@ pacman::p_load(mapview,  # view spatial data in viewer
                ggplot2,
                readxl,
                cowplot,
-               ggpubr
+               ggpubr,
+               zoo
 )
 
 options(scipen=999)  # turn off sci notation
@@ -73,11 +74,11 @@ scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas_event.csv", strings
   filter(scenario %in% relevant_scenarios)
 
 #2 Population and incidence
-ct_incidence_projections <- read.csv("processed/ct_incidence_projections.csv", stringsAsFactors =  FALSE)
+ct_incidence_projections <- read.csv("processed/ct_incidence_projections_adj.csv", stringsAsFactors =  FALSE) %>%
+  select(-Factor)
 
 #3 Projected VSL
 health_valuations_projected <- read.csv("processed/health_valuations_projected.csv", stringsAsFactors =  FALSE)
-
 
 #Merge w/ pollution deltas 
 ct_projections <- ct_incidence_projections %>%
@@ -169,8 +170,8 @@ mortality_proj_annual <- total_mortality_projections %>%
   geom_line()+
   geom_point(size = 1.5)+
   scale_y_continuous(name = "Annual mortality",
-                     limits = c(0, 9),
-                     breaks = seq(0, 10, by = 2)
+                     limits = c(0, 7),
+                     breaks = seq(0, 8, by = 2)
                     ) +
   ggtitle("Annual dust-induced mortality (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
@@ -189,8 +190,8 @@ mortality_proj <- total_mortality_projections %>%
   geom_line()+
   geom_point(size = 1.5)+
   scale_y_continuous(name = "Cumulative premature mortality",
-                     #limits = c(0, 250),
-                     breaks = seq(0, 250, by = 50)
+                     limits = c(0, 175),
+                     breaks = seq(0, 200, by = 25)
                      ) +
   ggtitle("Projected dust-induced mortality (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
@@ -208,7 +209,7 @@ costs_proj <- total_mortality_projections %>%
   geom_point(size = 1.5)+
   scale_y_continuous(name = "Cumulative mortality costs (billions USD)",
                     # limits = c(0, 500),
-                     breaks = seq(0, 2.5, by = .50)
+                     breaks = seq(0, 2, by = .50)
                      ) +
   ggtitle("Present value of projected costs (2025-2060)")+
   scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+

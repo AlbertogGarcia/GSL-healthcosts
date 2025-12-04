@@ -152,10 +152,10 @@ ct_incidence_projections_adj <- mortality_adjustmentfactors %>%
   right_join(ct_incidence_projections, by = c("Year", "upper_age")) %>%
   mutate(incidence_rate = incidence_rate*Factor,
          incidence_rate_daily = incidence_rate_daily*Factor) %>%
-  select(-Factor) %>%
-  filter(Year >= 2025)
+  filter(Year >= 2025) %>%
+  select(names(ct_incidence_projections), everything())
 
-ct_incidence_projections_adj <- ct_incidence_projections_adj[, names(ct_incidence_projections)]
+#ct_incidence_projections_adj <- ct_incidence_projections_adj[, names(ct_incidence_projections)]
 
-write.csv(ct_incidence_projections_adj, file = "processed/ct_incidence_projections.csv", row.names = FALSE)
+write.csv(ct_incidence_projections_adj, file = "processed/ct_incidence_projections_adj.csv", row.names = FALSE)
 

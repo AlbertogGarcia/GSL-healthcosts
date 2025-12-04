@@ -81,9 +81,10 @@ ct_school_pollution_race <- ct_school_race %>%
 
 #School Loss Days coefficients
 RR_pm25 = 1.02
-beta_pm25 <- log(RR_pm25)/10
+beta_pm25 <- log(RR_pm25)
 
-beta_pm10 <- 2.5/100/10
+RR_pm10 = 1.0228
+beta_pm10 <- log(RR_pm10)/10
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## Getting impacts
