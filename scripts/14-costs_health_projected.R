@@ -24,9 +24,11 @@ ACS_year = 2023
 ### 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-SLD_2024 = 1673.504
 VSL_2024 = 12.57222
 
+morbidity_valuations_2024 <- read.csv("data/health/morbidity_valuations_2024.csv", stringsAsFactors = F)
+
+income_elasticity = 0.4
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -36,7 +38,8 @@ CBO_projections <- readxl::read_excel("data/health/CBO_longterm_economic_2025.xl
 gdp_growth_projected <- data.frame(Year = t(CBO_projections[7,2:ncol(CBO_projections)]),
                                    realGDPpc_growth = t(CBO_projections[13,2:ncol(CBO_projections)]),
                                    CPI_growth = t(CBO_projections[35,2:ncol(CBO_projections)])) %>%
-  filter(Year > ACS_year)
+  filter(Year > ACS_year)%>%
+  mutate_at(vars(realGDPpc_growth, CPI_growth), ~ifelse(Year == 2024, 0, .))
 
 rownames(gdp_growth_projected) <- NULL
 
@@ -45,15 +48,26 @@ through_2060 <- gdp_growth_projected %>%
   summarise(CPI_growth  = mean(CPI_growth),
             realGDPpc_growth = mean(realGDPpc_growth))
 
-health_valuations_projected <- data.frame(Year = seq(2056, 2060),
+growth_projected <- data.frame(Year = seq(2056, 2060),
                             CPI_growth = through_2060$CPI_growth,
                             realGDPpc_growth = through_2060$realGDPpc_growth) %>%
   rbind(gdp_growth_projected) %>%
   arrange(Year) %>%
   mutate(cum_growth_CPI = cumprod(1 + CPI_growth/100),
-         cum_growth_GDP = cumprod(1 + realGDPpc_growth/100),
-         SLD_proj = SLD_2024*cum_growth_CPI*cum_growth_GDP^income_elasticity,
-         VSL_proj = VSL_2024*cum_growth_CPI*cum_growth_GDP^income_elasticity)%>%
-  select(Year, SLD_proj, VSL_proj)
+         cum_growth_GDP = cumprod(1 + realGDPpc_growth/100))
+         
+VSL_projected <- growth_projected %>%
+  mutate(VSL_proj = VSL_2024*cum_growth_CPI*cum_growth_GDP^income_elasticity)%>%
+  select(Year, VSL_proj)
 
-write.csv(health_valuations_projected, file = "processed/health_valuations_projected.csv", row.names = FALSE)
+morbidity_valuations_projected <- morbidity_valuations_2024 %>%
+  select(Endpoint, COI_24) %>%
+  slice(rep(row_number(), each = 2060-2024+1)) %>%
+  mutate(Year = rep(2024:2060, times = nrow(morbidity_valuations_2024))) %>%
+  full_join(growth_projected, by = "Year")%>%
+  mutate(COI_proj = COI_24*cum_growth_CPI*cum_growth_GDP^income_elasticity)%>%
+  select(Endpoint, Year, COI_proj)
+  
+
+write.csv(VSL_projected, file = "processed/VSL_projected.csv", row.names = FALSE)
+write.csv(morbidity_valuations_projected, file = "processed/morbidity_valuations_projected.csv", row.names = FALSE)

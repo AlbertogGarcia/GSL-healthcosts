@@ -38,25 +38,24 @@ palette <- list("white" = "#FAFAFA",
                 "orange" = "#fc8d62",
                 "green" = "#66c2a5",
                 "purple" = "#8da0cb",
-                "sc1275" = "#d7191c",
-                "sc1278" = "#fdae61",
-               # "sc1278" = "grey50", 
-                "sc1280" = "#abd9e9",
-                "sc1281" = "#2c7bb6"
+                "bad" = "#d7191c",
+                "current" = "#fdae61",
+                "target" = "#abd9e9",
+                "avg" = "#2c7bb6"
 )
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
-current_scenario = 1278
-relevant_scenarios <- c(1275, 1278, 1280, 1281) 
+all_scenarios <- seq(4182, 4202, by = 1) 
+current_scenario = 4192
+relevant_scenarios <- c(4183, current_scenario, 4198, 4200) 
 
-scenario_pal <- c(palette$sc1275, palette$sc1278, palette$sc1280, palette$sc1281)
+scenario_pal <- c(palette$bad, palette$current, palette$target, palette$avg)
 
-n_storms_data = 2
-n_storms_annual = 3
+n_years_storms = 6
+
 
 # main VSL and age-based VSL
 VSL_24 = 12.57222
@@ -78,12 +77,12 @@ ct_incidence_projections <- read.csv("processed/ct_incidence_projections_adj.csv
   select(-Factor)
 
 #3 Projected VSL
-health_valuations_projected <- read.csv("processed/health_valuations_projected.csv", stringsAsFactors =  FALSE)
+VSL_projected <- read.csv("processed/VSL_projected.csv", stringsAsFactors =  FALSE)
 
 #Merge w/ pollution deltas 
 ct_projections <- ct_incidence_projections %>%
   left_join(scenario_pm_deltas, by = "FIPS", relationship = "many-to-many")%>%
-  left_join(health_valuations_projected, by = "Year") %>%
+  left_join(VSL_projected, by = "Year") %>%
   filter(Year >= 2025)
 
 
@@ -105,8 +104,8 @@ ct_mortality_projections_temp <- ct_projections %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
          pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
          pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
-         mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-         mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+         mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
          mortality = mortality_pm10 + mortality_pm25,
          pm_delta = pm10_delta + pm25_delta)%>%
   drop_na(scenario)
@@ -144,37 +143,18 @@ total_mortality_projections <- ct_mortality_projections %>%
   
 write.csv(total_mortality_projections, file = "processed/total_mortality_projections.csv", row.names = FALSE)
 
-# 
-# total_mortality_projections_relative <- total_mortality_projections %>%
-#   left_join(total_mortality_projections %>%
-#           filter(scenario == baseline_scenario)%>%
-#           rename(baseline_mortality_pm10 = mortality_pm10,
-#                  baseline_mortality_pm25 = mortality_pm25,
-#                  baseline_mortality_pm = mortality_pm,
-#                  baseline_costs_VSL = costs_VSL)%>%
-#           dplyr::select(-scenario)
-#           , by = "Year"
-#   )%>%
-#   mutate(relative_mortality_pm10 = mortality_pm10 - baseline_mortality_pm10,
-#          relative_mortality_pm25 = mortality_pm25 - baseline_mortality_pm25,
-#          relative_mortality = mortality_pm - baseline_mortality_pm,
-#          relative_costs_VSL = costs_VSL - baseline_costs_VSL)%>%
-#   group_by(scenario)%>%
-#   mutate(PV_cum_relative_costs = cumsum(relative_costs_VSL),
-#          cum_relative_mortality = cumsum(relative_mortality))%>%
-#   filter(Year <= 2050)%>%
-#   select(scenario, Year, relative_mortality, cum_relative_mortality, relative_costs_VSL, PV_cum_relative_costs)
+
 
 mortality_proj_annual <- total_mortality_projections %>%
   ggplot(aes(x = Year, y = mortality, color = as.character(scenario)))+
   geom_line()+
   geom_point(size = 1.5)+
-  scale_y_continuous(name = "Annual mortality",
-                     limits = c(0, 7),
-                     breaks = seq(0, 8, by = 2)
+  scale_y_continuous(name = "Annual mortality"
+                     # , limits = c(0, 7),
+                     # breaks = seq(0, 8, by = 2)
                     ) +
   ggtitle("Annual dust-induced mortality (2025-2060)")+
-  scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
+  scale_color_manual(name = "GSL water level (ftASL)", values = scenario_pal)+
   theme_cowplot(14)+
   theme(legend.position = "bottom",
         plot.title = element_text(hjust = 0.5, size=16)
@@ -189,12 +169,12 @@ mortality_proj <- total_mortality_projections %>%
   #geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5)+
   geom_line()+
   geom_point(size = 1.5)+
-  scale_y_continuous(name = "Cumulative premature mortality",
-                     limits = c(0, 175),
-                     breaks = seq(0, 200, by = 25)
+  scale_y_continuous(name = "Cumulative premature mortality"
+                     # , limits = c(0, 175),
+                     # breaks = seq(0, 200, by = 25)
                      ) +
   ggtitle("Projected dust-induced mortality (2025-2060)")+
-  scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
+  scale_color_manual(name = "GSL water level (ftASL)", values = scenario_pal)+
   theme_cowplot(16)+
   theme(legend.position = "bottom",
         plot.title = element_text(hjust = 0.5)#, size=16)
@@ -207,12 +187,12 @@ costs_proj <- total_mortality_projections %>%
   ggplot(aes(x = Year, y = PV_cum_costs_VSL/1000, color = as.character(scenario)))+
   geom_line()+
   geom_point(size = 1.5)+
-  scale_y_continuous(name = "Cumulative mortality costs (billions USD)",
+  scale_y_continuous(name = "Cumulative mortality costs (billions USD)"
                     # limits = c(0, 500),
-                     breaks = seq(0, 2, by = .50)
+                    # breaks = seq(0, 2, by = .50)
                      ) +
   ggtitle("Present value of projected costs (2025-2060)")+
-  scale_color_manual(name = "GSL water level (mASL)", values = scenario_pal)+
+  scale_color_manual(name = "GSL water level (ftASL)", values = scenario_pal)+
   theme_cowplot(16)+
   theme(legend.position = "bottom",
         plot.title = element_text(hjust = 0.5)#, size=16)

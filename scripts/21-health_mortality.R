@@ -33,26 +33,23 @@ palette <- list("white" = "#FAFAFA",
                 "orange" = "#fc8d62",
                 "green" = "#66c2a5",
                 "purple" = "#8da0cb",
-                "sc1275" = "#d7191c",
-                "sc1278" = "#fdae61",
-                #"sc1278" = 
-                #  "grey50", 
-                #"#ffd93f", 
-                "sc1280" = "#abd9e9",
-                "sc1281" = "#2c7bb6"
+                "bad" = "#d7191c",
+                "current" = "#fdae61",
+                "target" = "#abd9e9",
+                "avg" = "#2c7bb6"
 )
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
-current_scenario = 1278
-relevant_scenarios <- c(1275, 1278, 1280, 1281) 
 
-scenario_pal <- c(palette$sc1275, palette$sc1278, palette$sc1280, palette$sc1281)
+all_scenarios <- seq(4182, 4202, by = 1) 
+current_scenario = 4192
+relevant_scenarios <- c(4183, current_scenario, 4198, 4200) 
 
-n_storms_data = 2
-n_storms_annual = 3
+scenario_pal <- c(palette$bad, palette$current, palette$target, palette$avg)
+
+n_years_storms = 6
 
 # main VSL and age-based VSL
 VSL_24 = 12.57222
@@ -124,8 +121,8 @@ ct_mortality_age_temp <- ct_mortality_pollution %>%
     incidence_rate_event = incidence_rate_daily*event_days,
     pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
     pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
-    mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-    mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+    mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+    mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
     mortality = mortality_pm10 + mortality_pm25,
     pm_delta = pm10_delta + pm25_delta
     #life_yrs_remaining = 77.2 - (lower_age + upper_age)/2,
@@ -182,36 +179,38 @@ total_mortality <- ct_mortality_age %>%
   ungroup
 
 
-mortality_costs_plot_prep <- total_mortality %>%
-  select(scenario, costs_VSL, endpoint) %>%
+mortality_plot_prep <- total_mortality %>%
+  select(scenario, mortality, endpoint) %>%
   filter(scenario %in% relevant_scenarios)%>%
   group_by(scenario)%>%
-  mutate(costs_VSL = ifelse(endpoint == "Mortality, All-cause", 2*costs_VSL - sum(costs_VSL), costs_VSL),
+  mutate(mortality = ifelse(endpoint == "Mortality, All-cause", 2*mortality - sum(mortality), mortality),
          endpoint = case_when(endpoint == "Mortality, All-cause" ~ "All other causes",
                               endpoint == "Mortality, Respiratory" ~ "Respiratory",
                               endpoint == "Mortality, Cardiovascular" ~ "Cardiovascular"),
-         total_costs_VSL = sum(costs_VSL)
+         total_mortality = sum(mortality),
+         costs_VSL = mortality*VSL_24,
+         total_costs_VSL = total_mortality*VSL_24
          ) %>%
   ungroup 
 
-mortality_costs_plot <- mortality_costs_plot_prep %>%
-  ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_VSL, fill = reorder(endpoint, - costs_VSL))
+mortality_costs_plot <- mortality_plot_prep %>%
+  ggplot(aes(x=reorder(scenario, scenario, order = T), y=mortality, fill = reorder(endpoint, - mortality))
   )+
   geom_bar(stat='identity')+
   geom_hline(yintercept = 0, linewidth = 0.25)+
   scale_y_continuous(
-    "Costs (millions USD)", 
-    breaks = seq(0, 50, by = 10),
-    sec.axis = sec_axis(~ . / VSL_24, 
-                        name = "Expected mortalities"
+    "Premature mortalities", 
+    #breaks = seq(0, 50, by = 10),
+    sec.axis = sec_axis(~ . * VSL_24, 
+                        name = "Costs (millions USD)"
     )
   )+
-  geom_text(data = mortality_costs_plot_prep
-            , aes(label=round(total_costs_VSL, 2), y=total_costs_VSL+2)
-            #, fontface='bold'
-  ) +
+  # geom_text(data = mortality_costs_plot_prep
+  #           , aes(label=round(total_mortality, 2), y=total_mortality+1)
+  #           #, fontface='bold'
+  # ) +
   ggtitle("Annual dust-induced mortality costs") + 
-  xlab("GSL water level (mASL)")+
+  xlab("GSL water level (ftASL)")+
   scale_fill_manual(values = c(palette$blue, palette$red, palette$green))+
   theme_cowplot(16)+
   theme(legend.position = "top",
@@ -221,66 +220,6 @@ mortality_costs_plot <- mortality_costs_plot_prep %>%
   guides(fill = guide_legend(title = NULL, reverse=T, hjust = 0.5))
 mortality_costs_plot
 
-all_cause_costs <- total_mortality %>%
-  filter(scenario %in% relevant_scenarios,
-         endpoint == "Mortality, All-cause"
-         )%>%
-ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_VSL, fill = as.character(scenario))
-)+
-  #geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), color = palette$dark)+
-  geom_bar(stat='identity')+
-  geom_hline(yintercept = 0, linewidth = 0.25)+
-  scale_y_continuous(
-    "Expected costs (millions USD)", 
-    sec.axis = sec_axis(~ . / VSL_24, 
-                        name = "Expected mortalities"
-                        , breaks = seq(-0, 10, by = 1)
-    )
-  )+
-  geom_text(aes(label=round(costs_VSL, 2), y=costs_VSL+(VSL_24/abs(max(mortality))))
-            #, fontface='bold'
-  ) +
-  #xlab("GSL water level (mASL)")+
-  scale_fill_manual(values = scenario_pal, name = "GSL water level (mASL)")+
-  theme_cowplot(16)+
-  theme(legend.position = "top",
-        legend.title = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank())+
-  guides(fill = guide_legend(title.position="top", title.hjust = 0.5))
-all_cause_costs
-
-all_cause_mort <- total_mortality %>%
-  filter(scenario %in% relevant_scenarios,
-         endpoint == "Mortality, All-cause"
-  )%>%
-  ggplot(aes(x=reorder(scenario, scenario, order = T), y=mortality, fill = as.character(scenario))
-  )+
-  #geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), color = palette$dark)+
-  geom_bar(stat='identity')+
-  geom_hline(yintercept = 0, linewidth = 0.25)+
-  scale_y_continuous(
-    "Expected premature mortalities", 
-    limits = c(0,3)
-    # sec.axis = sec_axis(~ . / VSL_24, 
-    #                     name = "Expected mortalities"
-    #                     , breaks = seq(-0, 10, by = 1)
-    # )
-  )+
-  #geom_text(aes(label=round(costs_VSL, 2), y=costs_VSL+(VSL_24/abs(max(mortality))))
-            #, fontface='bold'
-  #) +
-  #xlab("GSL water level (mASL)")+
-  scale_fill_manual(values = scenario_pal, name = "GSL water level (mASL)")+
-  theme_cowplot(16)+
-  theme(legend.position = "top",
-        legend.title = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank())+
-  guides(fill = guide_legend(title.position="top", title.hjust = 0.5))
-all_cause_mort
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Alternate VSL comparison
 total_mortality %>%
@@ -300,7 +239,7 @@ total_mortality %>%
   )+
   scale_fill_manual(values = c(palette$red, palette$blue), name = "VSL")+
   theme_cowplot(16)+
-  xlab("GSL water level (mASL)") + 
+  xlab("GSL water level (ftASL)") + 
   theme(legend.position = "top",
         legend.justification = "center"
       )+
@@ -348,7 +287,7 @@ mortality_age <- ct_mortality_age %>%
 
 
 mortality_age %>% 
-  filter(scenario == 1278, 
+  filter(scenario == current_scenario, 
          endpoint == "Mortality, All-cause"
          )%>%
   mutate(proportion_of_mortality = mortality/sum(mortality),
@@ -384,8 +323,8 @@ ct_mortality_agebyrace_temp <- ct_mortality_pollution_race %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
          pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
          pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
-         mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-         mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+         mortality_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         mortality_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
          mortality = mortality_pm10 + mortality_pm25,
          pm_delta = pm10_delta + pm25_delta)%>%
   drop_na(scenario)
@@ -450,7 +389,7 @@ ggplot(aes(x=scenario, color = reorder(race, -mortality_per_100k), y=mortality_p
   #scale_x_reverse(
   scale_x_continuous(
     breaks = relevant_scenarios,
-                  name = "GSL water level (mASL)")+
+                  name = "GSL water level (ftASL)")+
   scale_color_manual(values = c(palette$red, palette$blue, palette$dark, palette$orange, palette$green),
                      #name = "Race",
                      labels = c("Hawaiian/Pacific Islander", "White Non-hispanic", "Asian", "Hispanic/Latino", "Black/African American")
@@ -470,7 +409,7 @@ ggsave("figs/mortality_by_race.png",
 
 ct_mortality_map <- ct_mortality_agebyrace %>%
   group_by(scenario, FIPS, County, endpoint) %>%
-  summarise(pm_delta = sum(pm_delta, na.rm = T),
+  summarise(pm_delta = mean(pm_delta, na.rm = T),
             mortality = sum(mortality, na.rm = T),
             population = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),

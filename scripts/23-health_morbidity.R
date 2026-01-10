@@ -73,13 +73,7 @@ ct_morbidity_pollution <- ct_incidence_morbidity %>%
   mutate(incidence_rate_event = value*event_days) # incidence rates are already daily for morbidity
 
 
-# ct_morbidity_age <- ct_morbidity_pollution %>%
-#   mutate(morbidity_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-#          morbidity_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-#          morbidity = morbidity_pm10 + morbidity_pm25)%>%
-#   drop_na(scenario)
-
-# total morbidity by census tract and endpoint
+morbidity_valuations_2024 <- read.csv("data/health/morbidity_valuations_2024.csv", stringsAsFactors = F)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -123,6 +117,7 @@ ct_morbidity_age <- ct_morbidity_age_temp %>%
 total_morbidity <- ct_morbidity_age %>%
   group_by(scenario, endpoint) %>%
   summarise(morbidity = sum(morbidity, na.rm = T))%>%
-  ungroup
+  ungroup %>%
+  left_join(morbidity_valuations_2024, by = c("endpoint" = "Endpoint"))
 
 

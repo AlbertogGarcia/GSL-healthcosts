@@ -189,7 +189,7 @@ for(i in relevant_endpoints){
     ))%>%
     drop_na(beta) %>%
     select(-c(parameter:dose))%>%
-    pivot_wider(id_cols = FIPS:value, names_from = "pollutant", values_from = "beta")%>%
+    pivot_wider(names_from = "pollutant", values_from = "beta")%>%
     rename(beta_pm25 = pm2.5,
            beta_pm10 = pm10)
   

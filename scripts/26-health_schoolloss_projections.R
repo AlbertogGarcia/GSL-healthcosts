@@ -1,4 +1,4 @@
-# GSL dust costs: Mortality impacts
+# GSL dust costs: School absence impacts
 # albert.garcia@utah.edu
 # created: 05/28/2025
 # updated: 
@@ -33,25 +33,23 @@ palette <- list("white" = "#FAFAFA",
                 "orange" = "#fc8d62",
                 "green" = "#66c2a5",
                 "purple" = "#8da0cb",
-                "sc1275" = "#d7191c",
-                "sc1278" = "#fdae61",
-                # "sc1278" = "grey50", 
-                "sc1280" = "#abd9e9",
-                "sc1281" = "#2c7bb6"
+                "bad" = "#d7191c",
+                "current" = "#fdae61",
+                "target" = "#abd9e9",
+                "avg" = "#2c7bb6"
 )
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
-current_scenario = 1278
-relevant_scenarios <- c(1275, 1278, 1280, 1281) 
+all_scenarios <- seq(4182, 4202, by = 1) 
+current_scenario = 4192
+relevant_scenarios <- c(4183, current_scenario, 4198, 4200) 
 
-scenario_pal <- c(palette$sc1275, palette$sc1278, palette$sc1280, palette$sc1281)
+scenario_pal <- c(palette$bad, palette$current, palette$avg, palette$optimistic)
 
-n_storms_data = 2
-n_storms_annual = 3
+n_years_storms = 6
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
