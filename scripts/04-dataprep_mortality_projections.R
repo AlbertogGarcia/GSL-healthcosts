@@ -15,7 +15,8 @@ pacman::p_load(mapview,  # view spatial data in viewer
                tidyverse, # tidyverse
                stringr,
                fuzzyjoin,
-               ggplot2
+               ggplot2,
+               zoo # needed for interpolation of future adjusted mortality incidence
 )
 
 options(scipen=999)  # turn off sci notation
@@ -30,14 +31,7 @@ palette <- list("white" = "#FAFAFA",
                 "blue" = "#2c7bb6",
                 "orange" = "#fc8d62",
                 "green" = "#66c2a5",
-                "purple" = "#8da0cb",
-                "sc1275" = "#d7191c",
-                "sc1277" = "#fdae61",
-                "sc1278" = 
-                  "grey50", 
-                #"#ffd93f", 
-                "sc1280" = "#abd9e9",
-                "sc1281" = "#2c7bb6"
+                "purple" = "#8da0cb"
 )
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

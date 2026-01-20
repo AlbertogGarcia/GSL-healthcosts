@@ -47,7 +47,7 @@ all_scenarios <- seq(4182, 4202, by = 1)
 current_scenario = 4192
 relevant_scenarios <- c(4183, current_scenario, 4198, 4200) 
 
-scenario_pal <- c(palette$bad, palette$current, palette$avg, palette$optimistic)
+scenario_pal <- c(palette$bad, palette$current, palette$target, palette$avg)
 
 n_years_storms = 6
 

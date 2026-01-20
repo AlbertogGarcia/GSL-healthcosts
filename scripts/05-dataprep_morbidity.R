@@ -126,7 +126,8 @@ morbidity_incidence_ut <- morbidity_incidence_ut %>%
 
 morbidity_parameters <- read_excel("data/health/morbidity_parameters.xlsx") %>%
   select(-reference) %>%
-  filter(endpoint != "School Loss Days")
+  filter(endpoint != "School Loss Days") %>%
+  filter(!(endpoint == "HA, All Respiratory" & lower_age < 18 & pollutant == "pm10"))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #####Fuzzy join (of incidence to pop)
@@ -134,7 +135,8 @@ morbidity_parameters <- read_excel("data/health/morbidity_parameters.xlsx") %>%
 
 relevant_endpoints <- c("HA, All Respiratory",
                         "HA, All Cardiac Outcomes",
-                        "HA, Stroke",
+                       # "HA, Asthma",
+                       # "HA, Stroke",
                         "ER visits, All Respiratory",
                         "ER visits, All Cardiac Outcomes",
                        # "Emergency Room Visits, Asthma",

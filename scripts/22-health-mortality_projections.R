@@ -161,7 +161,7 @@ mortality_proj_annual <- total_mortality_projections %>%
   )
 mortality_proj_annual
 
-ggsave("figs/mortality_projections_annual.png", width = 6, height = 5)
+#ggsave("figs/mortality_projections_annual.png", width = 6, height = 5)
 
 
 mortality_proj <- total_mortality_projections %>%
@@ -202,52 +202,52 @@ ggarrange(mortality_proj, costs_proj,
           ncol = 1, nrow = 2,
           labels = c("A", "B"),
           legend = "bottom", common.legend = T)
-ggsave("figs/mortality_projections.png", width = 6, height = 11)
+#ggsave("figs/mortality_projections.png", width = 6, height = 11)
 
 
-A <- ggarrange(mortality_costs_plot, mortality_race,
-               ncol = 2, nrow = 1,
-               labels = c("A", "B"),
-               legend = "top", common.legend = F,
-               font.label = list(size = 22)
-               )
-
-B <- ggarrange(mortality_proj, costs_proj,
-               ncol = 2, nrow = 1,
-               labels = c("C", "D"),
-               legend = "none", common.legend = F,
-               font.label = list(size = 22)
-)
-
-library(patchwork)
-
-leg <- plot_spacer() + get_legend(mortality_proj) + plot_spacer() + plot_layout(ncol = 3, nrow = 1, 
-                                                                                widths = c(0.65, 1, 1))
-
-
-(A / plot_spacer()/ B / leg) + plot_layout(ncol = 1, nrow = 4, 
-                          heights = c(1, 0.025, 1, 0.05)
-)
-ggsave("figs/mortality_quad.png", width = 14, height = 14)
-
-A_alt <- plot_spacer() + ggarrange(mortality_costs_plot,
-               ncol = 1, nrow = 1,
-               labels = c("A"), legend = "none",
-               font.label = list(size = 22)
-) + plot_spacer() + plot_layout(widths = c(1, 3.5, 1))
-leg_A <- plot_spacer() + get_legend(mortality_costs_plot) + plot_spacer() + plot_layout(ncol = 3, nrow = 1, 
-                                                                                  widths = c(0.8, 1, 1))
-
-B_alt <- ggarrange(mortality_proj, costs_proj,
-               ncol = 2, nrow = 1,
-               labels = c("B", "C"),
-               legend = "none", common.legend = F,
-               font.label = list(size = 22)
-)
-
-
-
-(A_alt / leg_A / plot_spacer() / B_alt / leg) + plot_layout(ncol = 1, nrow = 5, 
-                                           heights = c(1, 0.1, 0.05, 1, 0.1)
-)
-ggsave("figs/mortality_trio.png", width = 13, height = 13)
+# A <- ggarrange(mortality_costs_plot, mortality_race,
+#                ncol = 2, nrow = 1,
+#                labels = c("A", "B"),
+#                legend = "top", common.legend = F,
+#                font.label = list(size = 22)
+#                )
+# 
+# B <- ggarrange(mortality_proj, costs_proj,
+#                ncol = 2, nrow = 1,
+#                labels = c("C", "D"),
+#                legend = "none", common.legend = F,
+#                font.label = list(size = 22)
+# )
+# 
+# library(patchwork)
+# 
+# leg <- plot_spacer() + get_legend(mortality_proj) + plot_spacer() + plot_layout(ncol = 3, nrow = 1, 
+#                                                                                 widths = c(0.65, 1, 1))
+# 
+# 
+# (A / plot_spacer()/ B / leg) + plot_layout(ncol = 1, nrow = 4, 
+#                           heights = c(1, 0.025, 1, 0.05)
+# )
+# ggsave("figs/mortality_quad.png", width = 14, height = 14)
+# 
+# A_alt <- plot_spacer() + ggarrange(mortality_costs_plot,
+#                ncol = 1, nrow = 1,
+#                labels = c("A"), legend = "none",
+#                font.label = list(size = 22)
+# ) + plot_spacer() + plot_layout(widths = c(1, 3.5, 1))
+# leg_A <- plot_spacer() + get_legend(mortality_costs_plot) + plot_spacer() + plot_layout(ncol = 3, nrow = 1, 
+#                                                                                   widths = c(0.8, 1, 1))
+# 
+# B_alt <- ggarrange(mortality_proj, costs_proj,
+#                ncol = 2, nrow = 1,
+#                labels = c("B", "C"),
+#                legend = "none", common.legend = F,
+#                font.label = list(size = 22)
+# )
+# 
+# 
+# 
+# (A_alt / leg_A / plot_spacer() / B_alt / leg) + plot_layout(ncol = 1, nrow = 5, 
+#                                            heights = c(1, 0.1, 0.05, 1, 0.1)
+# )
+# ggsave("figs/mortality_trio.png", width = 13, height = 13)

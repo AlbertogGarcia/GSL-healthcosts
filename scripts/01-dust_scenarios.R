@@ -63,6 +63,7 @@ scenarios <- do.call(rbind , tables)%>%
   mutate(event_hours = as.numeric(difftime(max(timestamp), min(timestamp), units = "hours"))) %>%
   ungroup() %>%
   select(-c(id, X))%>%
+  filter(scenario <= baseline_scenario) %>%
   select(scenario, timestamp, event, event_hours, everything()) %>%
   pivot_longer(5:ncol(.), names_to = "centroid_name", values_to = "pm25")
 
@@ -110,7 +111,6 @@ scenario_pm_deltas_event <- scenarios_event %>%
          event_days = event_hours/24
          )%>%
   select(-c(pm10, pm25, baseline_pm10, baseline_pm25))%>%
-  filter(scenario != baseline_scenario)%>%
   full_join(ct_centroids, by = "centroid_name")%>%
   drop_na(scenario)
 
@@ -129,9 +129,12 @@ current_pm_deltas_event <- scenario_pm_deltas_event %>%
 scenario_pm_deltas_event <- scenario_pm_deltas_event %>%
   left_join(current_pm_deltas_event, by = c("event", "FIPS"))%>%
   mutate(relative_pm10_delta = pm10_delta - baseline_pm10_delta,
-         relative_pm25_delta = pm25_delta - baseline_pm25_delta)
+         relative_pm25_delta = pm25_delta - baseline_pm25_delta) %>%
+  select(-baseline_pm25_delta, -baseline_pm10_delta)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Write csv
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+table(scenario_pm_deltas_event$scenario)
+
 write.csv(scenario_pm_deltas_event, file = "processed/scenario_pm_deltas_event.csv", row.names = FALSE)

@@ -28,9 +28,6 @@ options(dplyr.summarise.inform = FALSE)  # turn off dplyr group by comments
 options(java.parameters = "-Xmx8000m") 
 `%ni%` <- Negate(`%in%`)  # "not in" function
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### set base parameters
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Color palette
 palette <- list("white" = "#FAFAFA",
                 "dark" = "#0c2230",
@@ -39,46 +36,62 @@ palette <- list("white" = "#FAFAFA",
                 "orange" = "#fc8d62",
                 "green" = "#66c2a5",
                 "purple" = "#8da0cb",
-                "sc1275" = "#d7191c",
-                "sc1277" = "#fdae61",
-                "sc1278" = "grey50", 
-                "sc1280" = "#abd9e9",
-                "sc1281" = "#2c7bb6"
+                "bad" = "#d7191c",
+                "current" = "#fdae61",
+                "target" = "#abd9e9",
+                "avg" = "#2c7bb6"
 )
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### set base parameters
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
-relevant_scenarios <- c(1275, 1278, 1280, 1281) 
+all_scenarios <- seq(4182, 4203, by = 1) 
+current_scenario = 4192
+relevant_scenarios <- c(4183, current_scenario, 4198, 4200) 
 
-scenario_pal <- c(palette$sc1275, palette$sc1277, palette$sc1280, palette$sc1281)
-
+scenario_pal <- c(palette$bad, palette$current, palette$target, palette$avg)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Annual
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 #### Mortality
+total_mortality <- read.csv("processed/total_mortality.csv", stringsAsFactors =  FALSE) %>%
+  filter(endpoint == "Mortality, All-cause",
+         scenario %in% relevant_scenarios)
+
+#### Morbidity
+total_morbidity <- read.csv("processed/total_morbidity.csv", stringsAsFactors =  FALSE)
+
+#### School Loss Days
+total_schoolloss <- read.csv("processed/total_schoolloss.csv", stringsAsFactors =  FALSE)
+
+#### Combine
+
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Projections through 2060
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#### Mortality
 total_mortality_projections <- read.csv("processed/total_mortality_projections.csv", stringsAsFactors =  FALSE)
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### School Loss Days
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-total_schoolloss_projections <- read.csv("processed/total_schoolloss_projections.csv", stringsAsFactors =  FALSE)
- 
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Morbidity
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+total_morbidity_projections <- read.csv("processed/total_morbidity_projections.csv", stringsAsFactors =  FALSE)
 
+#### School Loss Days
+total_schoolloss_projections <- read.csv("processed/total_schoolloss_projections.csv", stringsAsFactors =  FALSE)
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Combine
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-total_projections <- total_mortality_projections %>%
-  ungroup %>%
-  filter(scenario %in% relevant_scenarios)%>%
-  full_join(total_schoolloss_projections, by = c("scenario", "Year"))%>%
-  mutate(PV_cum_costs = PV_cum_costs_VSL + PV_cum_costs_SLD
-         )
+# total_projections <- total_mortality_projections %>%
+#   ungroup %>%
+#   filter(scenario %in% relevant_scenarios)%>%
+#   full_join(total_schoolloss_projections, by = c("scenario", "Year"))%>%
+#   mutate(PV_cum_costs = PV_cum_costs_VSL + PV_cum_costs_SLD
+#          )
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

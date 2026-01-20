@@ -99,9 +99,11 @@ for(e in unique(morbidity_valuations_projected$Endpoint)){
     select(FIPS, County, event, Year, age_group, lower_age, upper_age, endpoint, current_morbidity, current_pm_delta)
   
   ct_morbidity_projections <- ct_morbidity_projections_temp %>%
-    inner_join(ct_morbidity_projections_current, by = c("FIPS", "County", "event", "Year", "age_group", "lower_age", "upper_age", "endpoint"))%>%
+    inner_join(ct_morbidity_projections_current, 
+               by = c("FIPS", "County", "event", "Year", "age_group", "lower_age", "upper_age", "endpoint"),
+               relationship = "many-to-many")%>%
     mutate(relative_morbidity = ifelse(scenario == current_scenario, 0, morbidity),
-           morbidity = relative_morbidity + current_morbidity,
+           morbidity = ifelse(relative_morbidity + current_morbidity >= 0, relative_morbidity + current_morbidity, 0),
            relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
            pm_delta = relative_pm_delta + current_pm_delta,
            PV_costs_COI = (morbidity*COI_proj)/(1+0.03)^(Year - 2024)

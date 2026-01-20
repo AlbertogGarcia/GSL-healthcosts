@@ -23,23 +23,6 @@ options(dplyr.summarise.inform = FALSE)  # turn off dplyr group by comments
 options(java.parameters = "-Xmx8000m") 
 `%ni%` <- Negate(`%in%`)  # "not in" function
 
-# Color palette
-palette <- list("white" = "#FAFAFA",
-                "dark" = "#0c2230",
-                "red" = "#d7191c",
-                "blue" = "#2c7bb6",
-                "orange" = "#fc8d62",
-                "green" = "#66c2a5",
-                "purple" = "#8da0cb",
-                "sc1275" = "#d7191c",
-                "sc1277" = "#fdae61",
-                "sc1278" = 
-                  "grey50", 
-                #"#ffd93f", 
-                "sc1280" = "#abd9e9",
-                "sc1281" = "#2c7bb6"
-)
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### School Loss Days
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

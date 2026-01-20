@@ -33,26 +33,23 @@ palette <- list("white" = "#FAFAFA",
                 "orange" = "#fc8d62",
                 "green" = "#66c2a5",
                 "purple" = "#8da0cb",
-                "sc1275" = "#d7191c",
-                "sc1278" = "#fdae61",
-                #"sc1278" = 
-                #  "grey50", 
-                #"#ffd93f", 
-                "sc1280" = "#abd9e9",
-                "sc1281" = "#2c7bb6"
+                "bad" = "#d7191c",
+                "current" = "#fdae61",
+                "target" = "#abd9e9",
+                "avg" = "#2c7bb6"
 )
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-all_scenarios <- seq(1275, 1281, by = 1) #just excludes baseline of 1282
-current_scenario = 1278
-relevant_scenarios <- c(1275, 1278, 1280, 1281) 
 
-scenario_pal <- c(palette$sc1275, palette$sc1278, palette$sc1280, palette$sc1281)
+all_scenarios <- seq(4182, 4202, by = 1) 
+current_scenario = 4192
+relevant_scenarios <- c(4183, current_scenario, 4198, 4200) 
 
-n_storms_data = 2
-n_storms_annual = 3
+scenario_pal <- c(palette$bad, palette$current, palette$target, palette$avg)
+
+n_years_storms = 6
 
 # cost of a school loss day
 SLD_24 = 1673.504
@@ -64,7 +61,7 @@ SLD_24 = 1673.504
 
 #1 Emissions scenarios by water-level
 scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas_event.csv", stringsAsFactors =  FALSE)%>%
-  filter(scenario %in% all_scenarios)
+  filter(scenario %in% relevant_scenarios)
 
 #2 Population and incidence
 ct_school <- read.csv("processed/ct_school.csv", stringsAsFactors =  FALSE)
@@ -94,8 +91,8 @@ ct_schoolloss_temp <- ct_school_pollution %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
          pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
          pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
-         SLD_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-         SLD_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+         SLD_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         SLD_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
          SLD = SLD_pm10 + SLD_pm25,
          pm_delta = pm10_delta + pm25_delta,
          endpoint = "School Loss Days"
@@ -127,8 +124,8 @@ ct_schoolloss_race_temp <- ct_school_pollution_race %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
          pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
          pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
-         SLD_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-         SLD_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+         SLD_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         SLD_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
          SLD = SLD_pm10 + SLD_pm25,
          pm_delta = pm10_delta + pm25_delta,
          endpoint = "School Loss Days"
@@ -166,6 +163,8 @@ total_schoolloss <- ct_schoolloss %>%
   )%>%
   ungroup %>%
   mutate(delta_rate = SLD/pop)
+
+write.csv(total_schoolloss, file = "processed/total_schoolloss.csv", row.names = FALSE)
 
 schoolloss_costs <- total_schoolloss %>%
   filter(scenario %in% relevant_scenarios

@@ -43,7 +43,7 @@ palette <- list("white" = "#FAFAFA",
 #### set base parameters
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-all_scenarios <- seq(4182, 4202, by = 1) 
+all_scenarios <- seq(4182, 4203, by = 1) 
 current_scenario = 4192
 relevant_scenarios <- c(4183, current_scenario, 4198, 4200) 
 
@@ -129,15 +129,15 @@ ct_mortality_age_temp <- ct_mortality_pollution %>%
     )%>%
   drop_na(scenario)
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### Get overall mortality impacts
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ct_mortality_age_current <- ct_mortality_age_temp %>%
   filter(scenario == current_scenario) %>%
   rename(current_mortality = mortality,
          current_pm_delta = pm_delta) %>%
   select(FIPS, County, event, age_group, lower_age, upper_age, endpoint, current_mortality, current_pm_delta)
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Get overall mortality impacts
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ct_mortality_age <- ct_mortality_age_temp %>%
   left_join(ct_mortality_age_current, by = c("FIPS", "County", "event", "age_group", "lower_age", "upper_age", "endpoint"))%>%
   mutate(relative_mortality = ifelse(scenario == current_scenario, 0, mortality),
@@ -147,6 +147,9 @@ ct_mortality_age <- ct_mortality_age_temp %>%
          costs_VSL = mortality*VSL_24,
          costs_age_VSL = mortality*age_vsl_2024) %>%
   select(FIPS, County, scenario, event, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, mortality, costs_VSL, costs_age_VSL)
+
+test <- ct_mortality_age %>% filter(scenario == 4192)
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Create data for analyses
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -177,6 +180,8 @@ total_mortality <- ct_mortality_age %>%
             costs_age_VSL = sum(costs_age_VSL, na.rm = T)
   )%>%
   ungroup
+
+write.csv(total_mortality, file = "processed/total_mortality.csv", row.names = FALSE)
 
 
 mortality_plot_prep <- total_mortality %>%
@@ -234,8 +239,7 @@ total_mortality %>%
   )+
   geom_bar(stat='identity', width=.8, position = "dodge")+
   scale_y_continuous(
-    "Expected costs (millions USD)", 
-    breaks = seq(0, 75, by = 15)
+    "Expected costs (millions USD)"
   )+
   scale_fill_manual(values = c(palette$red, palette$blue), name = "VSL")+
   theme_cowplot(16)+
@@ -305,8 +309,8 @@ mortality_age %>%
         plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(size = 11)
   )
-ggsave("figs/mortality_by_age.png", 
-       width = 9, height = 6)
+# ggsave("figs/mortality_by_age.png", 
+#        width = 9, height = 6)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Mortality by race

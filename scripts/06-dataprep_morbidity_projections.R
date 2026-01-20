@@ -76,14 +76,3 @@ for(e in unique(ct_incidence_morbidity$endpoint)){
 
 write.csv(ct_incidence_projections, file = "processed/ct_incidence_morbidity_projections.csv", row.names = FALSE)
 
-
-# ct_incidence_projections <- ct_incidence_morbidity %>%
-#   fuzzyjoin::fuzzy_left_join(county_pop_projections,
-#                              by = c("County" = "County",
-#                                     "lower_age" = "start.age" ,
-#                                     "upper_age" = "end.age"),
-#                              match_fun = list(`==`,`>=`, `<=`))%>%
-#   mutate(County = dplyr::coalesce(County.x,County.y),
-#          pop = pop*cum_growth)%>%
-#   select(-County.x,-County.y, -cum_growth, -start.age, -end.age)
-

@@ -51,7 +51,7 @@ ct_ACS_5to17 <- ct_ACS_age_wide %>%
          )
 
 # get county by age population totals
-county_age_pop_ACS <- ct_ACS_age %>%
+county_age_pop_ACS <- ct_ACS_5to17 %>%
   group_by(County, age_group, lower_age, upper_age)%>%
   summarise(pop = sum(pop, na.rm = T))
 
