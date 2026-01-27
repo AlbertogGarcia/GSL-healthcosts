@@ -106,9 +106,10 @@ ct_schoolloss_projections <- ct_schoolloss_projections_temp %>%
   mutate(relative_SLD = ifelse(scenario == current_scenario, 0, SLD),
          SLD = relative_SLD + current_SLD,
          relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
-         pm_delta = relative_pm_delta + current_pm_delta
+         pm_delta = relative_pm_delta + current_pm_delta,
+         PV_costs_SLD = COI_proj*SLD/(1+0.03)^(Year - 2024)
          ) %>%
-  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, pop, pm_delta, Endpoint, SLD)
+  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, pop, pm_delta, Endpoint, SLD, PV_costs_SLD)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -116,7 +117,6 @@ ct_schoolloss_projections <- ct_schoolloss_projections_temp %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 total_schoolloss_projections <- ct_schoolloss_projections %>%
-  mutate(PV_costs_SLD = COI_proj/(1+0.03)^(Year - 2024)) %>%
   group_by(scenario, Year) %>%
   summarise(SLD = sum(SLD, na.rm = T),
             PV_costs_SLD = sum(PV_costs_SLD, na.rm = T)/1000000

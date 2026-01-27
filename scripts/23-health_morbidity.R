@@ -112,7 +112,9 @@ total_morbidity <- ct_morbidity_age %>%
   group_by(scenario, endpoint) %>%
   summarise(morbidity = sum(morbidity, na.rm = T))%>%
   ungroup %>%
-  left_join(morbidity_valuations_2024, by = c("endpoint" = "Endpoint"))
+  left_join(morbidity_valuations_2024, by = c("endpoint" = "Endpoint")) %>%
+  mutate(costs = morbidity*COI_24)
+  
 
 write.csv(total_morbidity, file = "processed/total_morbidity.csv", row.names = FALSE)
 
