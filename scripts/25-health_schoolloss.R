@@ -158,7 +158,7 @@ ct_schoolloss_race <- ct_schoolloss_race_temp %>%
 total_schoolloss <- ct_schoolloss %>%
   group_by(scenario, endpoint) %>%
   summarise(SLD = sum(SLD, na.rm = T),
-            costs_SLD = sum(costs_SLD, na.rm = T)/1000000,
+            costs_SLD = sum(costs_SLD, na.rm = T),
             pop = sum(pop, na.rm = T)/length(unique(event))
   )%>%
   ungroup %>%
@@ -169,7 +169,7 @@ write.csv(total_schoolloss, file = "processed/total_schoolloss.csv", row.names =
 schoolloss_costs <- total_schoolloss %>%
   filter(scenario %in% relevant_scenarios
   )%>%
-  ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_SLD, fill = as.character(scenario))
+  ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_SLD/1000000, fill = as.character(scenario))
   )+
   #geom_point(data = data.frame(scenario = baseline_scenario, relative_mortality = 0), color = palette$dark)+
   geom_bar(stat='identity')+
@@ -181,7 +181,7 @@ schoolloss_costs <- total_schoolloss %>%
                        # , breaks = seq(0, 8000, by = 1000)
     )
   )+
-  geom_text(aes(label=round(costs_SLD, 2), y=costs_SLD+(SLD_24*3/abs(max(SLD))))
+  geom_text(aes(label=round(costs_SLD/1000000, 2), y=costs_SLD/1000000+4)
             #, fontface='bold'
   ) +
   #xlab("GSL water level (mASL)")+
@@ -210,7 +210,7 @@ schoolloss_counts <- total_schoolloss %>%
     #                     # , breaks = seq(0, 8000, by = 1000)
     # )
   )+
-  geom_text(aes(label=round(SLD, 0), y=SLD+(SLD_24*1000/abs(max(SLD))))
+  geom_text(aes(label=round(SLD, 0), y=SLD+(min(SLD)/3))
             #, fontface='bold'
   ) +
   #xlab("GSL water level (mASL)")+

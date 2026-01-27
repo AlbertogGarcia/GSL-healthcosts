@@ -63,32 +63,34 @@ scenario_pm_deltas <- read.csv("processed/scenario_pm_deltas_event.csv", strings
 #2 Population and incidence projections
 ct_school_projections <- read.csv("processed/ct_school_projections.csv", stringsAsFactors =  FALSE)
 
-#3 Projected VSL
-health_valuations_projected <- read.csv("processed/health_valuations_projected.csv", stringsAsFactors =  FALSE)
+#3 Projected cost of school loss day
+morbidity_valuations_projected <- read.csv("processed/morbidity_valuations_projected.csv", stringsAsFactors =  FALSE)
 
 #Merge w/ pollution deltas 
 ct_school_pollution <- ct_school_projections %>%
-  right_join(scenario_pm_deltas, by = "FIPS") %>%
-  left_join(health_valuations_projected, by = "Year") %>%
+  right_join(scenario_pm_deltas, by = "FIPS", relationship = "many-to-many") %>%
+  left_join(morbidity_valuations_projected %>%
+              filter(Endpoint == "School Loss Days")
+            , by = "Year") %>%
   filter(Year >= 2025)
 
 
 
 #School Loss Days coefficients
 RR_pm25 = 1.02
-beta_pm25 <- log(RR_pm25)/10
+beta_pm25 <- log(RR_pm25)
 
-beta_pm10 <- 2.5/100/10
+RR_pm10 = 1.0228
+beta_pm10 <- log(RR_pm10)/10
 
 ct_schoolloss_projections_temp <- ct_school_pollution %>%
   mutate(incidence_rate_event = incidence_rate_daily*event_days,
          pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
          pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
-         SLD_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
-         SLD_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)*(n_storms_annual/n_storms_data),
+         SLD_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         SLD_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
          SLD = SLD_pm10 + SLD_pm25,
-         pm_delta = pm10_delta + pm25_delta,
-         endpoint = "School Loss Days"
+         pm_delta = pm10_delta + pm25_delta
   )%>%
   drop_na(scenario)
 
@@ -97,18 +99,16 @@ ct_schoolloss_projections_current <- ct_schoolloss_projections_temp %>%
   filter(scenario == current_scenario) %>%
   rename(current_SLD = SLD,
          current_pm_delta = pm_delta) %>%
-  select(FIPS, County, event, Year, age_group, lower_age, upper_age, endpoint, current_SLD, current_pm_delta)
+  select(FIPS, County, event, Year, age_group, lower_age, upper_age, Endpoint, current_SLD, current_pm_delta)
 
 ct_schoolloss_projections <- ct_schoolloss_projections_temp %>%
-  left_join(ct_schoolloss_projections_current, by = c("FIPS", "County", "event", "Year", "age_group", "lower_age", "upper_age", "endpoint"))%>%
+  left_join(ct_schoolloss_projections_current, by = c("FIPS", "County", "event", "Year", "age_group", "lower_age", "upper_age", "Endpoint"), relationship = "many-to-many")%>%
   mutate(relative_SLD = ifelse(scenario == current_scenario, 0, SLD),
          SLD = relative_SLD + current_SLD,
          relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
-         pm_delta = relative_pm_delta + current_pm_delta,
-         PV_costs_SLD = (SLD*SLD_proj)/(1+0.03)^(Year - 2024)
+         pm_delta = relative_pm_delta + current_pm_delta
          ) %>%
-  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, pop, pm_delta, endpoint, SLD, PV_costs_SLD)
-
+  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, pop, pm_delta, Endpoint, SLD)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -116,6 +116,7 @@ ct_schoolloss_projections <- ct_schoolloss_projections_temp %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 total_schoolloss_projections <- ct_schoolloss_projections %>%
+  mutate(PV_costs_SLD = COI_proj/(1+0.03)^(Year - 2024)) %>%
   group_by(scenario, Year) %>%
   summarise(SLD = sum(SLD, na.rm = T),
             PV_costs_SLD = sum(PV_costs_SLD, na.rm = T)/1000000
