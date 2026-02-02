@@ -187,20 +187,23 @@ for(i in seq_along(endpoint_levels)){
       sec.axis = sec_axis(~ . * c, name = "Costs (millions USD)")
     ) +
     scale_fill_manual(values = scenario_pal, 
-                      name = "GSL elevation (ftASL)")+
+                      name = "Lake elevation scenario",
+                      labels = scenario_descrip)+
     theme_cowplot(14) +
     theme(
       plot.margin = margin(b = 20),
       plot.title = element_text(hjust = 0.5, margin = margin(b = 12)),
-      legend.position = "top",
-      legend.justification = "center",
+      legend.title.position = "top",
+      legend.direction = "horizontal",
+      legend.box.just = "center",  
+      legend.justification = "center", 
       axis.title.x = element_text(size = 12),
       axis.text.y = element_text(size = 13),
       axis.title.y = element_blank(),
       axis.ticks.y = element_blank()
     ) +
     coord_flip() + 
-    guides(fill = guide_legend(hjust = 0.5))
+    guides(fill = guide_legend(reverse = T, hjust = 0.5, title.hjust = 0.5))
   
   # Column logic (2 columns)
   is_left  <- i %% 2 == 1
@@ -242,7 +245,7 @@ for(i in seq_along(endpoint_levels)){
 
 ggarrange(
   plotlist = plot_list,
-  ncol = 2, widths = c(1.35, 1.025),
+  ncol = 2, widths = c(1.35, 1.01),
   nrow = 2,
   labels = c("A", "B", "C", "D"),
   common.legend = TRUE,
@@ -250,8 +253,16 @@ ggarrange(
 )
 
 ggsave("figs/morbidity_costs.png",
-       width = 10, height = 8)
+       width = 9, height = 9)
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Racial distribution of costs
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+total_mortality_race <- read.csv("processed/total_mortality_race.csv", stringsAsFactors =  FALSE) %>%
+  filter(scenario %in% relevant_scenarios)
+total_schoolloss_race <- read.csv("processed/total_schoolloss_race.csv", stringsAsFactors =  FALSE)
+#total_morbidity_race <- 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Projections through 2060
@@ -351,3 +362,34 @@ ggarrange(p1, legend,
 ggsave("figs/total_costs_projected.png",
        width = 9, height = 5)
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Output total costs per capita at census-tract for maps
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#### Mortality
+ct_mortality <- read.csv("processed/ct_mortality_map.csv", stringsAsFactors =  FALSE) %>%
+  filter(scenario %in% relevant_scenarios)%>%
+  mutate(mortality_costs = costs_VSL*1000000)%>%
+  select(FIPS, County, scenario, mortality_costs, population, pm_delta)
+
+#### School Loss Days
+ct_schoolloss <- read.csv("processed/ct_schoolloss_map.csv", stringsAsFactors =  FALSE) %>%
+  rename(costs = costs_SLD)%>%
+  select(FIPS, scenario, costs) 
+
+#### All morbidity
+ct_morbidity <- read.csv("processed/ct_morbidity.csv", stringsAsFactors =  FALSE) %>%
+  group_by(FIPS, scenario) %>%
+  summarise(costs = sum(costs, na.rm = T))%>%
+  ungroup %>%
+  rbind(ct_schoolloss) %>%
+  group_by(FIPS, scenario) %>%
+  summarise(morbidity_costs = sum(costs, na.rm = T))%>%
+  ungroup 
+
+ct_totals <- ct_mortality %>%
+  full_join(ct_morbidity, by = c("FIPS", "scenario")) %>%
+  mutate(costs = morbidity_costs + mortality_costs,
+         costs_per_capita = costs/population) 
+
+write.csv(ct_totals, file = "processed/ct_totals.csv", row.names = FALSE)

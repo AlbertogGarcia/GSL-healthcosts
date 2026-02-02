@@ -105,6 +105,14 @@ ct_morbidity_age <- ct_morbidity_age_temp %>%
          ) %>%
   select(FIPS, County, scenario, event, age_group, pop, pm_delta, endpoint, morbidity)
 
+ct_morbidity <- ct_morbidity_age %>%
+  group_by(FIPS, County, scenario, endpoint) %>%
+  summarise(morbidity = sum(morbidity, na.rm = T))%>%
+  ungroup %>%
+  left_join(morbidity_valuations_2024, by = c("endpoint" = "Endpoint")) %>%
+  mutate(costs = morbidity*COI_24)
+
+write.csv(ct_morbidity, file = "processed/ct_morbidity.csv", row.names = FALSE)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Totals morbidity
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -1,4 +1,4 @@
-# GSL dust costs: Mortality impacts
+# GSL dust costs: School loss days impacts
 # albert.garcia@utah.edu
 # created: 05/28/2025
 # updated: 
@@ -149,6 +149,13 @@ ct_schoolloss_race <- ct_schoolloss_race_temp %>%
   select(FIPS, County, scenario, event, Race, age_group, lower_age, upper_age, pop, pm_delta, endpoint, SLD, costs_SLD)
 
 
+ct_schoolloss_map <- ct_schoolloss_race %>%
+  group_by(scenario, FIPS, County, endpoint) %>%
+  summarise(SLD = sum(SLD, na.rm = T),
+            costs_SLD = sum(costs_SLD, na.rm = T)
+            )%>%
+  ungroup
+write.csv(ct_schoolloss_map, file = "processed/ct_schoolloss_map.csv", row.names = FALSE)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -159,7 +166,7 @@ total_schoolloss <- ct_schoolloss %>%
   group_by(scenario, endpoint) %>%
   summarise(SLD = sum(SLD, na.rm = T),
             costs_SLD = sum(costs_SLD, na.rm = T),
-            pop = sum(pop, na.rm = T)/length(unique(event))
+            pop = sum(pop, na.rm = T)
   )%>%
   ungroup %>%
   mutate(delta_rate = SLD/pop)
@@ -237,6 +244,9 @@ total_schoolloss_race <- ct_schoolloss_race %>%
   )%>%
   ungroup %>%
   mutate(SLD_per_100k = SLD/pop*100000)
+
+write.csv(total_schoolloss_race, file = "processed/total_schoolloss_race.csv", row.names = FALSE)
+
 
 schoolloss_race <- total_schoolloss_race %>%
   ggplot(aes(x=scenario, color = reorder(Race, -SLD_per_100k), y=SLD_per_100k))+

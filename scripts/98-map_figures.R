@@ -29,6 +29,8 @@ options(java.parameters = "-Xmx8000m")
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Load and organize data
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+current_scenario = 4192
+map_baseline = 4206
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Get relevant GSL lake elevation polygons
@@ -36,58 +38,40 @@ GSL_geotif <- terra::rast("data/gis/Great_Salt_Lake_TBDEM_100m_bilinear.tif")
 ## from-to-becomes
 # classify the values into three groups 
 # all values >= 0 and <= 0.25 become 1, etc.
-m <- c(0, 4192.913, 1278,
-       4192.913, 4206.04, 1282,
-       4206.04, Inf, NA
+m <- c(0, 4192, 4192,
+       4192, map_baseline, map_baseline,
+       map_baseline, Inf, NA
 )
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 GSL_rcl <- terra::as.polygons(classify(GSL_geotif, rclmat, include.lowest=FALSE))%>%
   st_as_sf %>%
-  mutate(elevation = case_when(Band_1 == 1282 ~ "Long-term avg: 1282mASL",
-                               Band_1 == 1278 ~ "Current level: 1278mASL")
+  mutate(elevation = case_when(Band_1 == map_baseline ~ "Long-term avg: 4206 ftASL",
+                               Band_1 == 4192 ~ "Current level: 4,192 ftASL")
   )
 
-m <- c(0, 4199.475, 1280,
-       4199.475, 4206.04, 1282,
-       4206.04, Inf, NA
+m <- c(0, 4198, 4198,
+       4198, map_baseline, map_baseline,
+       map_baseline, Inf, NA
 )
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
-GSL_1280 <- terra::as.polygons(classify(GSL_geotif, rclmat, include.lowest=FALSE))%>%
+GSL_4198 <- terra::as.polygons(classify(GSL_geotif, rclmat, include.lowest=FALSE))%>%
   st_as_sf %>%
-  mutate(elevation = case_when(Band_1 == 1282 ~ "Long-term avg: 1282mASL",
-                               Band_1 == 1280 ~ "Healthy lake: 1280mASL")
+  mutate(elevation = case_when(Band_1 == map_baseline ~ "Long-term avg: 4206 ftASL",
+                               Band_1 == 4198 ~ "Healthy lake: 4198 ftASL")
   )
 
-m <- c(0, 4183.071, 1275,
-       4183.071, 4206.04, 1282,
-       4206.04, Inf, NA
-)
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-GSL_1275 <- terra::as.polygons(classify(GSL_geotif, rclmat, include.lowest=FALSE))%>%
-  st_as_sf %>%
-  mutate(elevation = case_when(Band_1 == 1282 ~ "Long-term avg: 1282mASL",
-                               Band_1 == 1275 ~ "No action: 1275mASL")
-  )
 
-m <- c(0, 4202.756, 1281,
-       4202.756, 4206.04, 1282,
-       4206.04, Inf, NA
-)
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-GSL_1281 <- terra::as.polygons(classify(GSL_geotif, rclmat, include.lowest=FALSE))%>%
-  st_as_sf %>%
-  mutate(elevation = case_when(Band_1 == 1282 ~ "Long-term avg: 1282mASL",
-                               Band_1 == 1281 ~ "Real action: 1281 mASL")
-  )
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Mortality results and integrate with gis files for tracts
+# Cost results and integrate with gis files for tracts
 
-ct_mortality <- read.csv("processed/ct_mortality.csv", stringsAsFactors =  FALSE)
+ct_totals <- read.csv("processed/ct_totals.csv", stringsAsFactors =  FALSE) %>%
+  mutate(costs_per_capita_pm = costs_per_capita/pm_delta)
 
 fips_county <- read.csv("data/gis/fips_codes/county_fips_master.csv")%>%
   filter(state_abbr %in% c("UT"))%>%
   mutate(County = str_remove(county_name, " County"),
-         fips_county = as.character(county))%>%
+         fips_county = as.character(county)
+         )%>%
   select(County, fips_county)
 
 tracts.shp <- read_sf("data/gis/tracts/CensusTracts2020.shp")%>%
@@ -98,17 +82,12 @@ tracts.shp <- read_sf("data/gis/tracts/CensusTracts2020.shp")%>%
 
 utah.shp <- tracts.shp %>% st_union() %>% st_as_sf()
 
-ct_mortality.shp <- tracts.shp %>%
+ct_costs.shp <- tracts.shp %>%
   left_join(fips_county, by = "fips_county")%>%
   select(FIPS)%>%
-  left_join(ct_mortality, by = "FIPS")%>% 
-  filter(County %in% ct_mortality$County
-         , endpoint == "Mortality, All-cause"
-         )%>%
+  left_join(ct_totals, by = "FIPS")%>% 
+  # filter(County %in% ct_totals$County)%>%
   mutate_at(vars(pm_delta:ncol(.)), ~tidyr::replace_na(., 0))%>%
-  mutate(mortality_per100k = mortality/population*100000,
-         mortality_per100k = tidyr::replace_na(mortality_per100k, 0),
-         incidence_annual = ct_incidence_rate_annual) %>%
   st_as_sf()
 
 
@@ -140,26 +119,22 @@ bg <- basemaps::basemap_terra(ext= e_bg,
 )
 
 
-bg_labels <- basemaps::basemap_terra(ext=ct_mortality.shp, 
+bg_labels <- basemaps::basemap_terra(ext=ct_costs.shp, 
                                      map_service = "carto", map_type = "dark_only_labels"
 )
 
-ct_mortality_1278 <- ct_mortality.shp %>%
-  filter(scenario == 1278 | is.na(scenario)) %>%
+ct_costs_current <- ct_costs.shp %>%
+  filter(scenario == current_scenario | is.na(scenario)) %>%
   st_transform(terra::crs(bg)) %>% 
   st_as_sf()
 
-hist(ct_mortality_1278$pm_delta)
+hist(ct_costs_current$pm_delta)
 
-ct_mortality_1280 <- ct_mortality.shp %>%
-  filter(scenario == 1280 | is.na(scenario)) %>%
+ct_costs_4198 <- ct_costs.shp %>%
+  filter(scenario == 4198 | is.na(scenario)) %>%
   st_transform(terra::crs(bg)) %>% 
   st_as_sf()
 
-ct_mortality_1275 <- ct_mortality.shp %>%
-  filter(scenario == 1275 | is.na(scenario)) %>%
-  st_transform(terra::crs(bg)) %>% 
-  st_as_sf()
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## PM map
@@ -167,15 +142,15 @@ ct_mortality_1275 <- ct_mortality.shp %>%
 
 pm_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
   #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
-  tm_shape(ct_mortality_1278) + 
+  tm_shape(ct_costs_current) + 
   tm_polygons(col = "pm_delta",
-          title = "PM Exposure\n(\u03bcg/m3)",
+          title = "PM Exposure (\u03bcg/m3)",
           style = "cont",
-          pal = "-magma",
+          pal = "YlOrRd",
           alpha = 0.85,
-          lwd = 0.2,
-          breaks = c(0, 600, 1200, 1800),
-          labels = c(0, 600, 1200, "1800 or more")
+          lwd = 0.12,
+          breaks = c(0, 50, 150),
+          labels = c(0, 50, "150 or more")
   )+
   tm_shape(GSL_rcl) + tm_fill("elevation",
                               title = "GSL elevation",
@@ -183,14 +158,14 @@ pm_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
                               ) + 
   tm_legend(frame = T,
             bg.color = "#f9f9f9")+
-  tm_shape(SLC %>% st_centroid()) + tm_text("NAME", size = 1, col = "white", fontface = "bold")+
-  tm_shape(cities2 %>% st_centroid()) + tm_text("NAME", size = 3/4, col = "black")+
+  tm_shape(SLC %>% st_centroid()) + tm_text("NAME", size = 1.2, col = "black", fontface = "bold")+
+  tm_shape(cities2 %>% st_centroid()) + tm_text("NAME", size = 0.8, col = "black")+
   tm_layout(legend.outside = FALSE,
             legend.position = c("right", "top"),
             inner.margins = c(0,0,0,0),
             outer.margins = c(0,0,0,0)) 
 pm_map
-tmap_save(filename = "figs/pm_map_1278.png", width = 6, height = 7)
+tmap_save(filename = "figs/pm_map_current.png", width = 6, height = 7)
 
 tm_shape(GSL_rcl) + tm_fill("elevation",
                              title = "GSL elevation",
@@ -199,105 +174,24 @@ tm_shape(GSL_rcl) + tm_fill("elevation",
             legend.position = c("right", "top"),
             inner.margins = c(0,0,0,0),
             outer.margins = c(0,0,0,0)) 
-tmap_save(filename = "figs/lake_1278.png", width = 5, height = 6)
-
-pm_1280 <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
-  #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
-  tm_shape(ct_mortality_1280) + 
-  tm_polygons(col = "pm_delta",
-              title = "PM Exposure\n(\u03bcg/m3)",
-              style = "cont",
-              pal = "-magma",
-              alpha = 0.85,
-              lwd = 0.2,
-              breaks = c(0, 600, 1200, 1800),
-              labels = c(0, 600, 1200, "1800 or more")
-  )+
-  tm_shape(GSL_1280) + tm_fill("elevation",
-                              title = "GSL elevation",
-                              palette = c("#64a2b8", "#cdb9a6")
-  ) + 
-  tm_legend(frame = T,
-            bg.color = "#f9f9f9")+
-  tm_shape(SLC %>% st_centroid()) + tm_text("NAME", size = 1, col = "white", fontface = "bold")+
-  tm_shape(cities2 %>% st_centroid()) + tm_text("NAME", size = 3/4, col = "black")+
-  tm_layout(legend.outside = FALSE,
-            legend.position = c("right", "top"),
-            inner.margins = c(0,0,0,0),
-            outer.margins = c(0,0,0,0)) 
-pm_1280
-tmap_save(filename = "figs/pm_map_1280.png", width = 6, height = 7)
-
-tm_shape(GSL_1280) + tm_fill("elevation",
-                             title = "GSL elevation",
-                             palette = c("#64a2b8", "#cdb9a6"))+
-  tm_layout(legend.outside = FALSE,
-            legend.position = c("right", "top"),
-            inner.margins = c(0,0,0,0),
-            outer.margins = c(0,0,0,0)) 
-tmap_save(filename = "figs/lake_1280.png", width = 5, height = 6)
-
-pm_1275 <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
-  #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
-  tm_shape(ct_mortality_1275) + 
-  tm_polygons(col = "pm_delta",
-              title = "PM Exposure\n(\u03bcg/m3)",
-              style = "cont",
-              pal = "-magma",
-              alpha = 0.85,
-              lwd = 0.2,
-              breaks = c(0, 600, 1200, 1800),
-              labels = c(0, 600, 1200, "1800 or more")
-  )+
-  tm_shape(GSL_1275) + tm_fill("elevation",
-                               title = "GSL elevation",
-                               palette = c("#cdb9a6", "#64a2b8")
-  ) + 
-  tm_legend(frame = T,
-            bg.color = "#f9f9f9")+
-  tm_shape(SLC %>% st_centroid()) + tm_text("NAME", size = 1, col = "white", fontface = "bold")+
-  tm_shape(cities2 %>% st_centroid()) + tm_text("NAME", size = 3/4, col = "black")+
-  tm_layout(legend.outside = FALSE,
-            legend.position = c("right", "top"),
-            inner.margins = c(0,0,0,0),
-            outer.margins = c(0,0,0,0)) 
-pm_1275
-tmap_save(filename = "figs/pm_map_1275.png", width = 6, height = 7)
-
-tm_shape(GSL_1275) + tm_fill("elevation",
-                             title = "GSL elevation",
-                             palette = c("#cdb9a6", "#64a2b8"))+
-  tm_layout(legend.outside = FALSE,
-            legend.position = c("right", "top"),
-            inner.margins = c(0,0,0,0),
-            outer.margins = c(0,0,0,0)) 
-tmap_save(filename = "figs/lake_1275.png", width = 5, height = 6)
+tmap_save(filename = "figs/lake_current.png", width = 5, height = 6)
 
 
-tm_shape(GSL_1281) + tm_fill("elevation",
-                             title = "GSL elevation",
-                             palette = c("#cdb9a6", "#64a2b8"))+
-  tm_layout(legend.outside = FALSE,
-            legend.position = c("right", "top"),
-            inner.margins = c(0,0,0,0),
-            outer.margins = c(0,0,0,0)) 
-
-tmap_save(filename = "figs/lake_1281.png", width = 5, height = 6)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-## Mortality/cost map
+## Health Cost map
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-mortality_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
+CostPerCapita_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
   #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
-  tm_shape(ct_mortality_1278) + 
-  tm_polygons(col = "mortality_per100k",
-              title = "Dust-induced\nmortality (per 100k)",
+  tm_shape(ct_costs_current) + 
+  tm_polygons(col = "costs_per_capita",
+              title = "Dust-induced health\ncosts per capita",
               style = "cont",
-              pal = "-magma",
-              alpha = 0.85,
-              lwd = 0.15,
-              breaks = c(0, 0.1, 0.2, .3),
-              labels = c(0, 0.1, 0.2, "0.3 or more")
+              pal = "YlOrRd",
+              alpha = 0.75,
+              lwd = 0.2,
+              breaks = c(0, 25, 50, 100),
+              labels = c("$0", "$25", "$50", "$100 or more")
   )+
   tm_shape(GSL_rcl) + tm_fill("elevation",
                               palette = c("#64a2b8", "#cdb9a6"),
@@ -313,47 +207,26 @@ mortality_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
             outer.margins = c(0,0,0,0)) +
   tm_scale_bar(breaks = c(0, 10, 25))+
   tm_compass(type = "4star", size = 1.25, position = c("right", "top"))
-mortality_map
-tmap_save(filename = "figs/mortality_map_1278.png", width = 6, height = 7)
+CostPerCapita_map
+tmap_save(filename = "figs/cost_map_current.png", width = 6, height = 7)
 
-incidence_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
-  #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
-  tm_shape(ct_mortality_1278) + 
-  tm_polygons(col = "incidence_annual",
-              title = "Annual mortality incidence\nwithout dust",
-              style = "cont",
-              pal = "-RdYlGn",
-              alpha = 0.85,
-              lwd = 0.15
-              # breaks = c(0, 0.1, 0.2, .3),
-              # labels = c(0, 0.1, 0.2, "0.3 or more")
-  )+
-  tm_shape(GSL_rcl) + tm_fill("elevation",
-                              palette = c("#64a2b8", "#cdb9a6"),
-                              legend.show = FALSE
-  ) + 
-  tm_legend(frame = T,
-            bg.color = "#f9f9f9")+
-  # tm_shape(SLC %>% st_centroid()) + tm_text("NAME", size = 3/4, col = "white", fontface = "bold")+
-  # tm_shape(cities2 %>% st_centroid()) + tm_text("NAME", size = 2/3, col = "black")+
-  tm_layout(legend.outside = FALSE,
-            legend.position = c("right", "top"),
-            inner.margins = c(0,0,0,0),
-            outer.margins = c(0,0,0,0)) 
-incidence_map
-tmap_save(filename = "figs/incidence_map_1278.png", width = 6, height = 7)
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Health costs per PM exposure
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-pop_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
+summary((ct_costs_current%>% filter(costs_per_capita_pm>0))$costs_per_capita_pm)
+
+cost_by_delta_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
   #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
-  tm_shape(ct_mortality_1278) + 
-  tm_polygons(col = "population",
-              title = "Census tract population",
+  tm_shape(ct_costs_current) + 
+  tm_polygons(col = "costs_per_capita_pm",
+              title = "Ratio of per capita costs\nto \u03bcg/m3 PM exposure",
               style = "cont",
-              pal = "viridis",
-              alpha = 0.85,
+              pal = "Purples",
+              alpha = 0.9,
               lwd = 0.15,
-              breaks = c(0, 2500, 5000,10000,15000),
-              labels = c(0, "", "5,000", "", "15,000")
+              breaks = c(0, 1, 2)
+              #labels = c(0, 50, 100, "$150 or more")
   )+
   tm_shape(GSL_rcl) + tm_fill("elevation",
                               palette = c("#64a2b8", "#cdb9a6"),
@@ -361,27 +234,22 @@ pop_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
   ) + 
   tm_legend(frame = T,
             bg.color = "#f9f9f9")+
-  # tm_shape(SLC %>% st_centroid()) + tm_text("NAME", size = 3/4, col = "white", fontface = "bold")+
-  # tm_shape(cities2 %>% st_centroid()) + tm_text("NAME", size = 2/3, col = "black")+
+  tm_shape(SLC %>% st_centroid()) + tm_text("NAME", size = 1.2, col = "black", fontface = "bold")+
+  tm_shape(cities2 %>% st_centroid()) + tm_text("NAME", size = 3/4, col = "black", fontface = "bold")+
   tm_layout(legend.outside = FALSE,
             legend.position = c("right", "top"),
             inner.margins = c(0,0,0,0),
-            outer.margins = c(0,0,0,0)) 
-pop_map
-tmap_save(filename = "figs/pop_map_1278.png", width = 6, height = 7)
+            outer.margins = c(0,0,0,0)) +
+  tm_scale_bar(breaks = c(0, 10, 25))+
+  tm_compass(type = "4star", size = 1.25, position = c("right", "top"))
+cost_by_delta_map
+tmap_save(filename = "figs/cost_by_delta.png", width = 6, height = 7)
 
 
 
-
-
-
-
-
-
-
-
-
-
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Inset and combined maps
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 bg_utah <- basemaps::basemap_terra(ext=utah.shp, returnclass = 'raster', 
                                    map_service = "carto", map_type = "voyager_no_labels")%>%
@@ -418,7 +286,7 @@ png("figs/map.png"
 grid.newpage()
 
 print(pm_map, vp = viewport(0.25, 0.5)) #x,y coordinates of the grid here
-print(mortality_map, vp = viewport(0.75, 0.5)) #x,y coordinates of the grid here
+print(CostPerCapita_map, vp = viewport(0.75, 0.5)) #x,y coordinates of the grid here
 print(utah_inset, vp = viewport(0.065, 0.15, height = 0.27))
 # 3. Close the file
 dev.off()

@@ -168,9 +168,7 @@ ct_mortality <- ct_mortality_age %>%
             costs_age_VSL = sum(costs_age_VSL, na.rm = T),
             ct_incidence_rate_annual = weighted.mean(incidence_rate, pop, na.rm = T)
             )%>%
-  ungroup %>%
-  mutate(mortality_exposure_ratio = mortality/pm_delta)
-
+  ungroup
 
 write.csv(ct_mortality, file = "processed/ct_mortality.csv", row.names = FALSE)
 
@@ -245,14 +243,14 @@ total_mortality %>%
   mutate(VSL_type = case_when(VSL_type == "costs_VSL" ~ "EPA recommended",
                               VSL_type == "costs_age_VSL" ~ "Cohort-adjusted\n(Aldy & Viscusi 2008)"
   )) %>%
-  ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs, fill = reorder(VSL_type, - costs))
+  ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs, fill = reorder(VSL_type, costs))
   )+
   geom_bar(stat='identity', width=.8, position = "dodge")+
   scale_x_discrete(labels = scenario_descrip)+
   scale_y_continuous(
     "Expected costs (millions USD)"
   )+
-  scale_fill_manual(values = c(palette$red, palette$blue), name = "VSL")+
+  scale_fill_manual(values = c(palette$blue, palette$red), name = "VSL")+
   theme_cowplot(16)+
   #xlab("GSL water level (ftASL)") + 
   theme(legend.position = "top",
@@ -261,7 +259,7 @@ total_mortality %>%
         axis.ticks.y = element_blank()
       )+
   coord_flip()+
-  guides(fill = guide_legend(title.position="top", title.hjust = 0.5))
+  guides(fill = guide_legend(title.position="top", title.hjust = 0.5, reverse = T))
 ggsave("figs/mortality_by_VSL.png", width = 8, height = 6)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -426,15 +424,16 @@ ggsave("figs/mortality_by_race.png",
        width = 8, height = 5)
 
 
-# ct_mortality_map <- ct_mortality_agebyrace %>%
-#   group_by(scenario, FIPS, County, endpoint) %>%
-#   summarise(pm_delta = mean(pm_delta, na.rm = T),
-#             mortality = sum(mortality, na.rm = T),
-#             population = sum(pop, na.rm = T)/length(unique(event)),
-#             costs_VSL = sum(costs_VSL, na.rm = T),
-#             costs_age_VSL = sum(costs_age_VSL, na.rm = T),
-#             ct_incidence_rate_annual = weighted.mean(incidence_rate,pop)
-#   )%>%
-#   ungroup
-# write.csv(ct_mortality_map, file = "processed/ct_mortality_map.csv", row.names = FALSE)
-# 
+ct_mortality_map <- ct_mortality_agebyrace %>%
+  group_by(scenario, FIPS, County, endpoint) %>%
+  summarise(pw_pm_delta = weighted.mean(pm_delta, pop, na.rm = T),
+            pm_delta = mean(pm_delta, na.rm = T),
+            mortality = sum(mortality, na.rm = T),
+            population = sum(pop, na.rm = T)/length(unique(event)),
+            costs_VSL = sum(costs_VSL, na.rm = T),
+            costs_age_VSL = sum(costs_age_VSL, na.rm = T),
+            ct_incidence_rate_annual = weighted.mean(incidence_rate,pop)
+  )%>%
+  ungroup
+write.csv(ct_mortality_map, file = "processed/ct_mortality_map.csv", row.names = FALSE)
+
