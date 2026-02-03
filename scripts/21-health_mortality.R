@@ -380,6 +380,7 @@ total_mortality_race <- ct_mortality_agebyrace %>%
   group_by(scenario, race) %>%
   summarise(mortality = sum(mortality, na.rm = T),
             population = sum(pop, na.rm = T)/length(unique(event)),
+            pm_delta = weighted.mean(pm_delta, pop, na.rm = T),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T)
             )%>%
@@ -426,8 +427,7 @@ ggsave("figs/mortality_by_race.png",
 
 ct_mortality_map <- ct_mortality_agebyrace %>%
   group_by(scenario, FIPS, County, endpoint) %>%
-  summarise(pw_pm_delta = weighted.mean(pm_delta, pop, na.rm = T),
-            pm_delta = mean(pm_delta, na.rm = T),
+  summarise(pm_delta = weighted.mean(pm_delta, pop, na.rm = T),
             mortality = sum(mortality, na.rm = T),
             population = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),

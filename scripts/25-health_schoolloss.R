@@ -240,23 +240,22 @@ total_schoolloss_race <- ct_schoolloss_race %>%
   group_by(scenario, endpoint, Race) %>%
   summarise(SLD = sum(SLD, na.rm = T),
             costs_SLD = sum(costs_SLD, na.rm = T),
-            pop = sum(pop, na.rm = T)/length(unique(event))
+            student_pop = sum(pop, na.rm = T)/length(unique(event))
   )%>%
   ungroup %>%
-  mutate(SLD_per_100k = SLD/pop*100000)
+  mutate(SLD_per_100k = SLD/student_pop*100000)
 
 write.csv(total_schoolloss_race, file = "processed/total_schoolloss_race.csv", row.names = FALSE)
 
 
 schoolloss_race <- total_schoolloss_race %>%
+  mutate(SLD_per_100k = SLD/student_pop*100000) %>%
   ggplot(aes(x=scenario, color = reorder(Race, -SLD_per_100k), y=SLD_per_100k))+
   geom_line(linewidth = 1)+
   geom_point(data = total_schoolloss_race %>% filter(scenario %in% relevant_scenarios)
              , size = 2.5)+
   # ggtitle("Distribution of mortality risk across race")+
-  scale_y_continuous(name = paste("School Loss Days (per 100k students)"),
-                     limits = c(0, max(total_schoolloss_race$SLD_per_100k))
-  )+
+  scale_y_continuous(name = "School Loss Days (per 100k students)")+
   #scale_x_reverse(
   scale_x_continuous(
     breaks = relevant_scenarios,

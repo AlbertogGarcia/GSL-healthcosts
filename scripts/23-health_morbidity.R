@@ -125,3 +125,70 @@ total_morbidity <- ct_morbidity_age %>%
 
 write.csv(total_morbidity, file = "processed/total_morbidity.csv", row.names = FALSE)
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# By race
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#2 Population and incidence
+ct_incidence_morbidity_race <- read.csv("processed/ct_incidence_morbidity_race.csv", stringsAsFactors =  FALSE)
+
+#Merge w/ pollution deltas 
+ct_morbidity_pollution_race <- ct_incidence_morbidity_race %>%
+  left_join(scenario_pm_deltas, by = "FIPS", 
+            relationship = "many-to-many")%>%
+  mutate(incidence_rate_event = value*event_days) # incidence rates are already daily for morbidity
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Getting impacts
+
+ct_morbidity_agebyrace_temp <- ct_morbidity_pollution_race %>%
+  mutate(pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
+         pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
+         morbidity_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         morbidity_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
+         morbidity = morbidity_pm10 + morbidity_pm25,
+         pm_delta = pm10_delta + pm25_delta
+  )%>%
+  drop_na(scenario)
+
+#### Get overall impacts, not just relative
+ct_morbidity_agebyrace_current <- ct_morbidity_agebyrace_temp %>%
+  filter(scenario == current_scenario) %>%
+  rename(current_morbidity = morbidity,
+         current_pm_delta = pm_delta) %>%
+  select(FIPS, County, event, race, age_group, endpoint, current_morbidity, current_pm_delta)
+
+ct_morbidity_agebyrace <- ct_morbidity_agebyrace_temp %>%
+  left_join(ct_morbidity_agebyrace_current, by = c("FIPS", "County", "event", "race", "age_group", "endpoint"))%>%
+  mutate(relative_morbidity = ifelse(scenario == current_scenario, 0, morbidity),
+         morbidity = ifelse(relative_morbidity + current_morbidity >= 0, relative_morbidity + current_morbidity, 0),
+         relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
+         pm_delta = relative_pm_delta + current_pm_delta
+  ) %>%
+  select(FIPS, County, scenario, event, race, age_group, pop, pm_delta, endpoint, morbidity)
+
+ct_morbidity_race <- ct_morbidity_agebyrace %>%
+  group_by(FIPS, County, scenario, race, endpoint) %>%
+  summarise(morbidity = sum(morbidity, na.rm = T))%>%
+  ungroup %>%
+  left_join(morbidity_valuations_2024, by = c("endpoint" = "Endpoint")) %>%
+  mutate(costs = morbidity*COI_24)
+write.csv(ct_morbidity_race, file = "processed/ct_morbidity_race.csv", row.names = FALSE)
+
+
+total_morbidity_race <- ct_morbidity_race %>%
+  drop_na(race) %>%
+  filter(race %ni% c("Other Race", "Multiple Race", "American Indian"))%>%
+  group_by(scenario, endpoint, race) %>%
+  summarise(costs = sum(costs, na.rm = T))%>%
+  ungroup
+write.csv(total_morbidity_race, file = "processed/total_morbidity_race.csv", row.names = FALSE)
+
+
+ct_morbidity_map <- ct_morbidity_agebyrace %>%
+  group_by(FIPS, County, scenario, endpoint) %>%
+  summarise(morbidity = sum(morbidity, na.rm = T))%>%
+  ungroup %>%
+  left_join(morbidity_valuations_2024, by = c("endpoint" = "Endpoint")) %>%
+  mutate(costs = morbidity*COI_24)
+
+write.csv(ct_morbidity_map, file = "processed/ct_morbidity_map.csv", row.names = FALSE)

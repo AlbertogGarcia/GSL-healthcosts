@@ -1,4 +1,4 @@
-# GSL dust costs: asthma impacts
+# GSL dust costs: morbidity incidence data prep
 # albert.garcia@utah.edu
 # created: 05/28/2025
 # updated: 

@@ -363,6 +363,132 @@ ggsave("figs/total_costs_projected.png",
        width = 9, height = 5)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Racial disparities in costs per capita
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+map_A <- c(
+  "American Indian and Alaska Native Alone" = "American Indian",
+  "Asian alone" = "Asian",
+  "Black or African American Alone" = "Black/African American",
+  "Hispanic or Latino" = "Hispanic/Latino",
+  "Hawaiian and PI Alone" = "Pacific Islander",
+  "White NH" = "White",
+  "Multi Racial" = "Multiracial",
+  "Other Race Alone" = "Other"
+)
+map_B <- c(
+  "AfAm/Black" = "Black/African American",
+  "Asian" = "Asian",
+  "Hispanic/Latino" = "Hispanic/Latino",
+  "Pacific Islander" = "Pacific Islander",
+  "White" = "White"
+)
+
+
+total_mortality_race <- read.csv("processed/total_mortality_race.csv", stringsAsFactors =  FALSE) %>%
+  filter(scenario %in% relevant_scenarios)%>%
+  mutate(race_std = recode(race, !!!map_A),
+         mortality_costs = costs_VSL*1000000)%>%
+  select(scenario, race_std, mortality_costs, population, pm_delta)
+
+total_schoolloss_race <- read.csv("processed/total_schoolloss_race.csv", stringsAsFactors =  FALSE) %>%
+  mutate(race_std = recode(Race, !!!map_B)) %>%
+  rename(costs = costs_SLD) %>%
+  select(scenario, race_std, costs)
+
+unique(total_mortality_race$race_std)
+unique(total_schoolloss_race$race_std)
+
+total_morbidity_race <- read.csv("processed/total_morbidity_race.csv", stringsAsFactors =  FALSE) %>%
+  mutate(race_std = recode(race, !!!map_A)) %>%
+  group_by(scenario, race_std) %>%
+  summarise(costs = sum(costs, na.rm = T))%>%
+  ungroup %>%
+  rbind(total_schoolloss_race) %>%
+  group_by(scenario, race_std) %>%
+  summarise(morbidity_costs = sum(costs, na.rm = T))%>%
+  ungroup 
+
+total_costs_race <- total_mortality_race %>%
+  full_join(total_morbidity_race, by = c("race_std", "scenario")) %>%
+  mutate(costs = morbidity_costs + mortality_costs,
+         costs_per_capita = costs/population,
+         costs_per_delta = costs_per_capita/pm_delta) %>%
+  drop_na(mortality_costs) %>%
+  rename(Race = race_std)
+
+total_costs_race %>%
+  ggplot(aes(x=scenario, color = reorder(Race, -costs_per_capita), y=costs_per_capita))+
+  geom_line(linewidth = 1)+
+  geom_point(size = 2.5)+
+  scale_y_continuous(name = "Health costs per capita",
+                     labels = label_dollar())+
+  scale_x_continuous(
+    breaks = relevant_scenarios,
+    name = "GSL water level (ftASL)")+
+  scale_color_manual(values = c(palette$red, palette$green, palette$orange, palette$blue, palette$dark)
+  )+
+  ggtitle("Per-capita health costs by race")+
+  theme_cowplot(14)+
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        legend.title = element_blank(),
+        legend.justification = "center"
+  )
+ggsave("figs/race_costs.png",
+       width = 9, height = 6)
+
+cost_plot_current <- total_costs_race %>%
+  filter(scenario == 4192) %>%
+  ggplot(aes(
+    x = costs_per_capita,
+    y = reorder(Race, costs_per_capita)
+  )) +
+  geom_point(size = 5, color = palette$dark) +
+  scale_x_continuous(
+    name = "Per-capita health costs",
+    labels = label_dollar()
+  ) +
+  scale_y_discrete(name = NULL) +
+  ggtitle("Health costs by race") +
+  theme_cowplot(13) +
+  theme(
+    panel.grid.major = element_line(color = "grey85", linewidth = 0.25),
+    axis.line = element_line(color = "grey50"),
+    plot.title = element_text(hjust = 0.5)
+  )
+cost_plot_current
+
+pm_plot_current <- total_costs_race %>%
+  filter(scenario == 4192) %>%
+  ggplot(aes(
+    x = pm_delta,
+    y = reorder(Race, costs_per_capita)
+  )) +
+  geom_point(size = 5, color = palette$dark) +
+  scale_x_continuous(
+    name = "Avg. PM exposure per dust storm"
+  ) +
+  scale_y_discrete(name = NULL) +
+  ggtitle("Dust exposure by race") +
+  theme_cowplot(13) +
+  theme(
+    panel.grid.major = element_line(color = "grey85", linewidth = 0.25),
+    axis.line = element_line(color = "grey50"),
+    plot.title = element_text(hjust = 0.5),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+pm_plot_current
+
+ggarrange(cost_plot_current, pm_plot_current,
+          ncol = 2, widths = c(1.3,1)
+)
+
+ggsave("figs/race_disparity_dotplot.png",
+       width = 9, height = 5)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Output total costs per capita at census-tract for maps
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -378,7 +504,7 @@ ct_schoolloss <- read.csv("processed/ct_schoolloss_map.csv", stringsAsFactors = 
   select(FIPS, scenario, costs) 
 
 #### All morbidity
-ct_morbidity <- read.csv("processed/ct_morbidity.csv", stringsAsFactors =  FALSE) %>%
+ct_morbidity <- read.csv("processed/ct_morbidity_map.csv", stringsAsFactors =  FALSE) %>%
   group_by(FIPS, scenario) %>%
   summarise(costs = sum(costs, na.rm = T))%>%
   ungroup %>%
