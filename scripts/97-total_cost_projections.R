@@ -426,7 +426,11 @@ total_costs_race %>%
   scale_x_continuous(
     breaks = relevant_scenarios,
     name = "GSL water level (ftASL)")+
-  scale_color_manual(values = c(palette$red, palette$green, palette$orange, palette$blue, palette$dark)
+  scale_color_manual(values = c(palette$red, 
+                                palette$blue, 
+                                palette$orange, 
+                                palette$green, 
+                                palette$dark)
   )+
   ggtitle("Per-capita health costs by race")+
   theme_cowplot(14)+
@@ -438,55 +442,114 @@ total_costs_race %>%
 ggsave("figs/race_costs.png",
        width = 9, height = 6)
 
+total_costs_long <- total_costs_race %>%
+  pivot_longer(
+    cols = c(morbidity_costs, mortality_costs),
+    names_to = "endpoint_category",
+    values_to = "cost"
+  ) %>%
+  mutate(
+    damage_type = recode(
+      endpoint_category,
+      morbidity_costs = "Morbidity",
+      mortality_costs = "Mortality"
+    ),
+    costs = cost/population
+  )
+
+total_costs_long %>%
+  ggplot(aes(
+    x = scenario,
+    y = costs,
+    color = reorder(Race, -costs_per_capita),
+    group = Race
+  )) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2.5) +
+  facet_wrap(~ damage_type, nrow = 1) +
+  scale_y_continuous(
+    name = "Health costs per capita",
+    labels = scales::label_dollar()
+  ) +
+  scale_x_continuous(
+    breaks = relevant_scenarios,
+    name = "GSL elevation (ftASL)"
+  ) +
+  scale_color_manual(values = c(
+    palette$red,
+    palette$blue,
+    palette$orange,
+    palette$green,
+    palette$dark
+  )) +
+  ggtitle("Per-capita mortality and morbidity costs by race") +
+  theme_bw(14) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold")
+  )
+ggsave("figs/race_costs_mortmorb.png",
+       width = 9, height = 6)
+
 cost_plot_current <- total_costs_race %>%
   filter(scenario == 4192) %>%
   ggplot(aes(
-    x = costs_per_capita,
-    y = reorder(Race, costs_per_capita)
+    x = reorder(Race, -costs_per_capita),
+    y = costs_per_capita
   )) +
   geom_point(size = 5, color = palette$dark) +
-  scale_x_continuous(
+  scale_y_continuous(
     name = "Per-capita health costs",
     labels = label_dollar()
   ) +
-  scale_y_discrete(name = NULL) +
+  scale_x_discrete(name = NULL) +
   ggtitle("Health costs by race") +
-  theme_cowplot(13) +
-  theme(
-    panel.grid.major = element_line(color = "grey85", linewidth = 0.25),
-    axis.line = element_line(color = "grey50"),
-    plot.title = element_text(hjust = 0.5)
+  theme_bw(13) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        panel.grid.major = element_line(color = "grey85", linewidth = 0.25),
+        axis.line = element_line(color = "grey50"),
+        axis.title = element_text(size = 14),
+        axis.text.x = element_text(
+          angle = 40, hjust = 1, vjust = 1,
+          size = 12
+        )
   )
 cost_plot_current
 
 pm_plot_current <- total_costs_race %>%
   filter(scenario == 4192) %>%
   ggplot(aes(
-    x = pm_delta,
-    y = reorder(Race, costs_per_capita)
+    x = reorder(Race, -costs_per_capita),
+    y = pm_delta
   )) +
   geom_point(size = 5, color = palette$dark) +
-  scale_x_continuous(
+  scale_y_continuous(
     name = "Avg. PM exposure per dust storm"
   ) +
-  scale_y_discrete(name = NULL) +
+  scale_x_discrete(name = NULL) +
   ggtitle("Dust exposure by race") +
-  theme_cowplot(13) +
-  theme(
+  theme_bw(13) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
     panel.grid.major = element_line(color = "grey85", linewidth = 0.25),
     axis.line = element_line(color = "grey50"),
-    plot.title = element_text(hjust = 0.5),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank()
+    axis.title = element_text(size = 14),
+    axis.text.x = element_text(
+      angle = 40, hjust = 1, vjust = 1,
+      size = 12
+    )
   )
 pm_plot_current
 
 ggarrange(cost_plot_current, pm_plot_current,
-          ncol = 2, widths = c(1.3,1)
+          ncol = 2,
+          labels = c("A", "B")
 )
 
 ggsave("figs/race_disparity_dotplot.png",
-       width = 9, height = 5)
+       width = 9, height = 6)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Output total costs per capita at census-tract for maps

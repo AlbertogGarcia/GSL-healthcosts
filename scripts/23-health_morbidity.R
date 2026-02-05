@@ -172,6 +172,7 @@ ct_morbidity_race <- ct_morbidity_agebyrace %>%
   ungroup %>%
   left_join(morbidity_valuations_2024, by = c("endpoint" = "Endpoint")) %>%
   mutate(costs = morbidity*COI_24)
+
 write.csv(ct_morbidity_race, file = "processed/ct_morbidity_race.csv", row.names = FALSE)
 
 
@@ -182,7 +183,6 @@ total_morbidity_race <- ct_morbidity_race %>%
   summarise(costs = sum(costs, na.rm = T))%>%
   ungroup
 write.csv(total_morbidity_race, file = "processed/total_morbidity_race.csv", row.names = FALSE)
-
 
 ct_morbidity_map <- ct_morbidity_agebyrace %>%
   group_by(FIPS, County, scenario, endpoint) %>%
