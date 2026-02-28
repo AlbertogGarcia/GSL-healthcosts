@@ -83,11 +83,13 @@ for(e in unique(morbidity_valuations_projected$Endpoint)){
   ct_morbidity_projections_temp <- ct_morbidity_pollution %>%
     mutate(incidence_rate_event = value*event_days, # incidence rates are already daily for morbidity
            pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
-           pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
            morbidity_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
-           morbidity_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
-           morbidity = morbidity_pm10 + morbidity_pm25,
-           pm_delta = pm10_delta + pm25_delta
+           morbidity_pm10_lower = ((1-(1/exp(beta_pm10_lower*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+           morbidity_pm10_upper = ((1-(1/exp(beta_pm10_upper*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+           morbidity = morbidity_pm10,
+           morbidity_lower = morbidity_pm10_lower,
+           morbidity_upper = morbidity_pm10_upper,
+           pm_delta = pm10_delta
     )%>%
     drop_na(scenario)
   
@@ -95,20 +97,28 @@ for(e in unique(morbidity_valuations_projected$Endpoint)){
   ct_morbidity_projections_current <- ct_morbidity_projections_temp %>%
     filter(scenario == current_scenario) %>%
     rename(current_morbidity = morbidity,
+           current_morbidity_lower = morbidity_lower,
+           current_morbidity_upper = morbidity_upper,
            current_pm_delta = pm_delta) %>%
-    select(FIPS, County, event, Year, age_group, lower_age, upper_age, endpoint, current_morbidity, current_pm_delta)
+    select(FIPS, County, event, Year, age_group, lower_age, upper_age, endpoint, current_morbidity, current_morbidity_lower, current_morbidity_upper, current_pm_delta)
   
   ct_morbidity_projections <- ct_morbidity_projections_temp %>%
     inner_join(ct_morbidity_projections_current, 
                by = c("FIPS", "County", "event", "Year", "age_group", "lower_age", "upper_age", "endpoint"),
                relationship = "many-to-many")%>%
     mutate(relative_morbidity = ifelse(scenario == current_scenario, 0, morbidity),
+           relative_morbidity_lower = ifelse(scenario == current_scenario, 0, morbidity_lower),
+           relative_morbidity_upper = ifelse(scenario == current_scenario, 0, morbidity_upper),
            morbidity = ifelse(relative_morbidity + current_morbidity >= 0, relative_morbidity + current_morbidity, 0),
+           morbidity_lower = ifelse(relative_morbidity_lower + current_morbidity_lower >= 0, relative_morbidity_lower + current_morbidity_lower, 0),
+           morbidity_upper = ifelse(relative_morbidity_upper + current_morbidity_upper >= 0, relative_morbidity_upper + current_morbidity_upper, 0),
            relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
            pm_delta = relative_pm_delta + current_pm_delta,
-           PV_costs_COI = (morbidity*COI_proj)/(1+0.03)^(Year - 2024)
+           PV_costs_COI = COI_proj*morbidity/(1+0.03)^(Year - 2024),
+           PV_costs_lower = COI_proj*morbidity_lower/(1+0.03)^(Year - 2024),
+           PV_costs_upper = COI_proj*morbidity_upper/(1+0.03)^(Year - 2024)
     ) %>%
-    select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, pop, pm_delta, endpoint, morbidity, PV_costs_COI)
+    select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, pop, pm_delta, endpoint, morbidity, morbidity_lower, morbidity_upper, PV_costs_COI, PV_costs_lower, PV_costs_upper)
   
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   ## Aggregation
@@ -116,15 +126,22 @@ for(e in unique(morbidity_valuations_projected$Endpoint)){
   total_morbidity_projections <- ct_morbidity_projections %>%
     group_by(scenario, Year, endpoint) %>%
     summarise(morbidity = sum(morbidity, na.rm = T),
-              PV_costs_COI = sum(PV_costs_COI, na.rm = T)/1000000
+              morbidity_lower = sum(morbidity_lower, na.rm = T),
+              morbidity_upper = sum(morbidity_upper, na.rm = T),
+              PV_costs_COI = sum(PV_costs_COI, na.rm = T)/1e6,
+              PV_costs_lower = sum(PV_costs_lower, na.rm = T)/1e6,
+              PV_costs_upper = sum(PV_costs_upper, na.rm = T)/1e6
     )%>%
     ungroup %>%
     group_by(scenario) %>%
-    mutate(PV_cum_costs_COI = cumsum(PV_costs_COI),
-           cum_morbidity = cumsum(morbidity))%>%
+    mutate(cum_morbidity = cumsum(morbidity),
+           cum_morbidity_lower = cumsum(morbidity_lower),
+           cum_morbidity_upper = cumsum(morbidity_upper),
+           PV_cum_costs_COI = cumsum(PV_costs_COI),
+           PV_cum_costs_lower = cumsum(PV_costs_lower),
+           PV_cum_costs_upper = cumsum(PV_costs_upper))%>%
     ungroup %>%
     rbind(total_morbidity_projections)
-  
   
   rm(ct_morbidity_projections, ct_morbidity_projections_current, ct_morbidity_projections_temp, ct_morbidity_pollution)
   

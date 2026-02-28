@@ -51,8 +51,6 @@ scenario_pal <- c(palette$bad, palette$current, palette$target, palette$avg)
 
 n_years_storms = 6
 
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Load and merge processed data
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -81,11 +79,13 @@ morbidity_valuations_2024 <- read.csv("data/health/morbidity_valuations_2024.csv
 
 ct_morbidity_age_temp <- ct_morbidity_pollution %>%
   mutate(pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
-         pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
          morbidity_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
-         morbidity_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
-         morbidity = morbidity_pm10 + morbidity_pm25,
-         pm_delta = pm10_delta + pm25_delta
+         morbidity_pm10_lower = ((1-(1/exp(beta_pm10_lower*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         morbidity_pm10_upper = ((1-(1/exp(beta_pm10_upper*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         morbidity = morbidity_pm10,
+         morbidity_lower = morbidity_pm10_lower,
+         morbidity_upper = morbidity_pm10_upper,
+         pm_delta = pm10_delta
   )%>%
   drop_na(scenario)
 
@@ -93,17 +93,23 @@ ct_morbidity_age_temp <- ct_morbidity_pollution %>%
 ct_morbidity_age_current <- ct_morbidity_age_temp %>%
   filter(scenario == current_scenario) %>%
   rename(current_morbidity = morbidity,
+         current_morbidity_lower = morbidity_lower,
+         current_morbidity_upper = morbidity_upper,
          current_pm_delta = pm_delta) %>%
-  select(FIPS, County, event, age_group, endpoint, current_morbidity, current_pm_delta)
+  select(FIPS, County, event, age_group, endpoint, current_morbidity, current_morbidity_lower, current_morbidity_upper, current_pm_delta)
 
 ct_morbidity_age <- ct_morbidity_age_temp %>%
   left_join(ct_morbidity_age_current, by = c("FIPS", "County", "event", "age_group", "endpoint"))%>%
   mutate(relative_morbidity = ifelse(scenario == current_scenario, 0, morbidity),
+         relative_morbidity_lower = ifelse(scenario == current_scenario, 0, morbidity_lower),
+         relative_morbidity_upper = ifelse(scenario == current_scenario, 0, morbidity_upper),
          morbidity = ifelse(relative_morbidity + current_morbidity >= 0, relative_morbidity + current_morbidity, 0),
+         morbidity_lower = ifelse(relative_morbidity_lower + current_morbidity_lower >= 0, relative_morbidity_lower + current_morbidity_lower, 0),
+         morbidity_upper = ifelse(relative_morbidity_upper + current_morbidity_upper >= 0, relative_morbidity_upper + current_morbidity_upper, 0),
          relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
          pm_delta = relative_pm_delta + current_pm_delta
          ) %>%
-  select(FIPS, County, scenario, event, age_group, pop, pm_delta, endpoint, morbidity)
+  select(FIPS, County, scenario, event, age_group, pop, pm_delta, endpoint, morbidity, morbidity_lower, morbidity_upper)
 
 ct_morbidity <- ct_morbidity_age %>%
   group_by(FIPS, County, scenario, endpoint) %>%
@@ -118,10 +124,14 @@ write.csv(ct_morbidity, file = "processed/ct_morbidity.csv", row.names = FALSE)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 total_morbidity <- ct_morbidity_age %>%
   group_by(scenario, endpoint) %>%
-  summarise(morbidity = sum(morbidity, na.rm = T))%>%
+  summarise(morbidity = sum(morbidity, na.rm = T),
+            morbidity_lower = sum(morbidity_lower, na.rm = T),
+            morbidity_upper = sum(morbidity_upper, na.rm = T))%>%
   ungroup %>%
   left_join(morbidity_valuations_2024, by = c("endpoint" = "Endpoint")) %>%
-  mutate(costs = morbidity*COI_24)
+  mutate(costs = morbidity*COI_24,
+         costs_lower = morbidity_lower*COI_24,
+         costs_upper = morbidity_upper*COI_24)
 
 write.csv(total_morbidity, file = "processed/total_morbidity.csv", row.names = FALSE)
 
@@ -142,11 +152,13 @@ ct_morbidity_pollution_race <- ct_incidence_morbidity_race %>%
 
 ct_morbidity_agebyrace_temp <- ct_morbidity_pollution_race %>%
   mutate(pm10_delta = ifelse(scenario == current_scenario, pm10_delta, relative_pm10_delta),
-         pm25_delta = ifelse(scenario == current_scenario, pm25_delta, relative_pm25_delta),
          morbidity_pm10 = ((1-(1/exp(beta_pm10*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
-         morbidity_pm25 = ((1-(1/exp(beta_pm25*pm25_delta)))*incidence_rate_event*pop)/n_years_storms,
-         morbidity = morbidity_pm10 + morbidity_pm25,
-         pm_delta = pm10_delta + pm25_delta
+         morbidity_pm10_lower = ((1-(1/exp(beta_pm10_lower*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         morbidity_pm10_upper = ((1-(1/exp(beta_pm10_upper*pm10_delta)))*incidence_rate_event*pop)/n_years_storms,
+         morbidity = morbidity_pm10,
+         morbidity_lower = morbidity_pm10_lower,
+         morbidity_upper = morbidity_pm10_upper,
+         pm_delta = pm10_delta
   )%>%
   drop_na(scenario)
 
@@ -154,17 +166,23 @@ ct_morbidity_agebyrace_temp <- ct_morbidity_pollution_race %>%
 ct_morbidity_agebyrace_current <- ct_morbidity_agebyrace_temp %>%
   filter(scenario == current_scenario) %>%
   rename(current_morbidity = morbidity,
+         current_morbidity_lower = morbidity_lower,
+         current_morbidity_upper = morbidity_upper,
          current_pm_delta = pm_delta) %>%
-  select(FIPS, County, event, race, age_group, endpoint, current_morbidity, current_pm_delta)
+  select(FIPS, County, event, race, age_group, endpoint, current_morbidity, current_morbidity_lower, current_morbidity_upper, current_pm_delta)
 
 ct_morbidity_agebyrace <- ct_morbidity_agebyrace_temp %>%
   left_join(ct_morbidity_agebyrace_current, by = c("FIPS", "County", "event", "race", "age_group", "endpoint"))%>%
   mutate(relative_morbidity = ifelse(scenario == current_scenario, 0, morbidity),
+         relative_morbidity_lower = ifelse(scenario == current_scenario, 0, morbidity_lower),
+         relative_morbidity_upper = ifelse(scenario == current_scenario, 0, morbidity_upper),
          morbidity = ifelse(relative_morbidity + current_morbidity >= 0, relative_morbidity + current_morbidity, 0),
+         morbidity_lower = ifelse(relative_morbidity_lower + current_morbidity_lower >= 0, relative_morbidity_lower + current_morbidity_lower, 0),
+         morbidity_upper = ifelse(relative_morbidity_upper + current_morbidity_upper >= 0, relative_morbidity_upper + current_morbidity_upper, 0),
          relative_pm_delta = ifelse(scenario == current_scenario, 0, pm_delta),
          pm_delta = relative_pm_delta + current_pm_delta
   ) %>%
-  select(FIPS, County, scenario, event, race, age_group, pop, pm_delta, endpoint, morbidity)
+  select(FIPS, County, scenario, event, race, age_group, pop, pm_delta, endpoint, morbidity, morbidity_lower, morbidity_upper)
 
 ct_morbidity_race <- ct_morbidity_agebyrace %>%
   group_by(FIPS, County, scenario, race, endpoint) %>%
@@ -176,12 +194,18 @@ ct_morbidity_race <- ct_morbidity_agebyrace %>%
 write.csv(ct_morbidity_race, file = "processed/ct_morbidity_race.csv", row.names = FALSE)
 
 
-total_morbidity_race <- ct_morbidity_race %>%
+total_morbidity_race <- ct_morbidity_agebyrace %>%
   drop_na(race) %>%
   filter(race %ni% c("Other Race", "Multiple Race", "American Indian"))%>%
   group_by(scenario, endpoint, race) %>%
-  summarise(costs = sum(costs, na.rm = T))%>%
-  ungroup
+  summarise(morbidity = sum(morbidity, na.rm = T),
+            morbidity_lower = sum(morbidity_lower, na.rm = T),
+            morbidity_upper = sum(morbidity_upper, na.rm = T))%>%
+  ungroup %>%
+  left_join(morbidity_valuations_2024, by = c("endpoint" = "Endpoint")) %>%
+  mutate(costs = morbidity*COI_24,
+         costs_lower = morbidity_lower*COI_24,
+         costs_upper = morbidity_upper*COI_24)
 write.csv(total_morbidity_race, file = "processed/total_morbidity_race.csv", row.names = FALSE)
 
 ct_morbidity_map <- ct_morbidity_agebyrace %>%

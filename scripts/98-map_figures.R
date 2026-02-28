@@ -67,6 +67,8 @@ GSL_4198 <- terra::as.polygons(classify(GSL_geotif, rclmat, include.lowest=FALSE
 ct_totals <- read.csv("processed/ct_totals.csv", stringsAsFactors =  FALSE) %>%
   mutate(costs_per_capita_pm = costs_per_capita/pm_delta)
 
+scenarios_map <- read.csv("processed/scenarios_map.csv", stringsAsFactors =  FALSE) 
+
 fips_county <- read.csv("data/gis/fips_codes/county_fips_master.csv")%>%
   filter(state_abbr %in% c("UT"))%>%
   mutate(County = str_remove(county_name, " County"),
@@ -88,6 +90,13 @@ ct_costs.shp <- tracts.shp %>%
   left_join(ct_totals, by = "FIPS")%>% 
   # filter(County %in% ct_totals$County)%>%
   mutate_at(vars(pm_delta:ncol(.)), ~tidyr::replace_na(., 0))%>%
+  st_as_sf()
+
+ct_pm10.shp <- tracts.shp %>%
+  left_join(fips_county, by = "fips_county")%>%
+  select(FIPS)%>%
+  left_join(scenarios_map, by = "FIPS")%>% 
+  mutate_at(vars(pm10_delta), ~tidyr::replace_na(., 0))%>%
   st_as_sf()
 
 
@@ -128,6 +137,11 @@ ct_costs_current <- ct_costs.shp %>%
   st_transform(terra::crs(bg)) %>% 
   st_as_sf()
 
+ct_pm10_current <- ct_pm10.shp %>%
+  filter(scenario == current_scenario | is.na(scenario)) %>%
+  st_transform(terra::crs(bg)) %>% 
+  st_as_sf()
+
 hist(ct_costs_current$pm_delta)
 
 ct_costs_4198 <- ct_costs.shp %>%
@@ -142,9 +156,9 @@ ct_costs_4198 <- ct_costs.shp %>%
 
 pm_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
   #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
-  tm_shape(ct_costs_current) + 
-  tm_polygons(col = "pm_delta",
-          title = "PM Exposure (\u03bcg/m3)",
+  tm_shape(ct_pm10_current) + 
+  tm_polygons(col = "pm10_delta",
+          title = "PM10 Exposure (\u03bcg/m3)",
           style = "cont",
           pal = "YlOrRd",
           alpha = 0.85,
@@ -220,7 +234,7 @@ cost_by_delta_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
   #tm_shape(bg) + tm_rgb(alpha = 0.9)+#tm_rgb()+
   tm_shape(ct_costs_current) + 
   tm_polygons(col = "costs_per_capita_pm",
-              title = "Ratio of per capita costs\nto \u03bcg/m3 PM exposure",
+              title = "Ratio of per capita costs\nto \u03bcg/m3 PM10 exposure",
               style = "cont",
               pal = "Purples",
               alpha = 0.9,

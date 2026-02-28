@@ -34,21 +34,24 @@ current_scenario = 4192
 # optimistic 4200
 # target: 4198
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### ct shapefile
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ct_centroids <- st_as_sf(read.csv("data/dust/centroid_locations/centroid_location.csv"), 
+                         coords = c("lon", "lat"), 
+                         crs = 4326) %>%
+  st_join(read_sf("data/gis/tracts/CensusTracts2020.shp")%>%
+            rename(FIPS = GEOID20)%>%
+            select(FIPS) %>% 
+            st_transform(crs = 4326)
+  )%>%
+  st_drop_geometry()
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### load csvs
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 files  <- list.files("data/dust/updated", pattern = '\\.csv', full.names = T)
 tables <- lapply(seq_along(files), function(x) cbind(read.csv(files[x], header = TRUE), id=files[x]))
-
-scenarios_avgStorm <- do.call(rbind , tables)%>%
-  mutate(scenario = str_sub(id,-10,-7))%>%
-  select(-c(id, X))%>%
-  select(scenario, everything())%>%
-  pivot_longer(2:ncol(.), names_to = "centroid_name", values_to = "pm25")%>%
-  group_by(scenario, centroid_name)%>%
-  summarise(pm25 = mean(pm25, na.rm = T))%>%
-  ungroup%>%
-  mutate(pm10 = pm25*9)# Assumes pm10 makes up 90% of the total mass and pm2.5 10%
 
 scenarios <- do.call(rbind , tables)%>%
   # 1. Convert timestamp to datetime
@@ -69,26 +72,32 @@ scenarios <- do.call(rbind , tables)%>%
 
 table(year(scenarios$timestamp))
 
+scenarios_avgStorm <- scenarios %>%
+  group_by(scenario, centroid_name)%>%
+  summarise(pm25 = mean(pm25, na.rm = T))%>%
+  ungroup%>%
+  mutate(pm10 = pm25*10)# Assumes pm10 makes up 90% of the total mass and pm2.5 10%
+
+scenarios_map <- scenarios_avgStorm %>%
+  filter(scenario == baseline_scenario) %>%
+  rename(baseline_pm10 = pm10) %>%
+  select(baseline_pm10, centroid_name) %>%
+  inner_join(scenarios_avgStorm, by = "centroid_name") %>%
+  mutate(pm10_delta = pm10 - baseline_pm10) %>%
+  select(scenario, centroid_name, pm10_delta) %>%
+  full_join(ct_centroids, by = "centroid_name")%>%
+  drop_na(scenario)
+  
+write.csv(scenarios_map, "processed/scenarios_map.csv")
+
 scenarios_event <- scenarios %>%
   group_by(scenario, event, event_hours, centroid_name)%>%
   summarise(pm25 = mean(pm25, na.rm = T))%>%
   ungroup %>%
-  mutate(pm10 = pm25*9)
+  mutate(pm10 = pm25*10)
 
 table(scenarios_event$event_hours)
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### Match centroids back to "real" census tracts
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-ct_centroids <- st_as_sf(read.csv("data/dust/centroid_locations/centroid_location.csv"), 
-                         coords = c("lon", "lat"), 
-                         crs = 4326) %>%
-  st_join(read_sf("data/gis/tracts/CensusTracts2020.shp")%>%
-            rename(FIPS = GEOID20)%>%
-            select(FIPS) %>% 
-            st_transform(crs = 4326)
-          )%>%
-  st_drop_geometry()
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Get relative to "baseline scenario" of 4203ft

@@ -124,10 +124,6 @@ morbidity_incidence_ut <- morbidity_incidence_ut %>%
 
 
 
-morbidity_parameters <- read_excel("data/health/morbidity_parameters.xlsx") %>%
-  select(-reference) %>%
-  filter(endpoint != "School Loss Days") %>%
-  filter(!(endpoint == "HA, All Respiratory" & lower_age < 18 & pollutant == "pm10"))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #####Fuzzy join (of incidence to pop)
@@ -135,13 +131,20 @@ morbidity_parameters <- read_excel("data/health/morbidity_parameters.xlsx") %>%
 
 relevant_endpoints <- c("HA, All Respiratory",
                         "HA, All Cardiac Outcomes",
-                       # "HA, Asthma",
-                       # "HA, Stroke",
+                        "HA, Asthma",
                         "ER visits, All Respiratory",
                         "ER visits, All Cardiac Outcomes",
-                       # "Emergency Room Visits, Asthma",
                         "Work Loss Days"
                         )
+
+morbidity_parameters <- read_excel("data/health/morbidity_parameters.xlsx") %>%
+  select(-reference) %>%
+  filter(endpoint %in% relevant_endpoints) %>%
+  filter(pollutant == "pm10") %>%
+  filter(!(endpoint == "HA, All Respiratory" & lower_age < 65)) %>%
+  mutate(CI_lower = ifelse(is.na(CI_lower), parameter_value - 1.96*se, CI_lower),
+         CI_upper = ifelse(is.na(CI_upper), parameter_value + 1.96*se, CI_upper))
+
 
 ct_incidence_ut <- data.frame()
 
@@ -188,12 +191,26 @@ for(i in relevant_endpoints){
       parameter == "RR" ~ log(parameter_value)/dose,
       parameter == "OR" ~ log((parameter_value / (1 - value + (value*parameter_value))))/dose,
       parameter == "HR" ~ log(((1-(1-value)^parameter_value)/value))/dose
+    ),
+    beta_lower = case_when(
+      parameter == "beta" ~ CI_lower,
+      parameter == "RR" ~ log(CI_lower)/dose,
+      parameter == "OR" ~ log((CI_lower / (1 - value + (value*CI_lower))))/dose,
+      parameter == "HR" ~ log(((1-(1-value)^CI_lower)/value))/dose
+    ),
+    beta_upper = case_when(
+      parameter == "beta" ~ CI_upper,
+      parameter == "RR" ~ log(CI_upper)/dose,
+      parameter == "OR" ~ log((CI_upper / (1 - value + (value*CI_upper))))/dose,
+      parameter == "HR" ~ log(((1-(1-value)^CI_upper)/value))/dose
     ))%>%
     drop_na(beta) %>%
-    select(-c(parameter:dose))%>%
-    pivot_wider(names_from = "pollutant", values_from = "beta")%>%
-    rename(beta_pm25 = pm2.5,
-           beta_pm10 = pm10)
+    select(-c(parameter:CI_upper))%>%
+    select(-pollutant) %>% # since all are pm10 as of now
+    #pivot_wider(names_from = "pollutant", values_from = "beta")%>%
+    rename(beta_pm10 = beta,
+           beta_pm10_lower = beta_lower,
+           beta_pm10_upper = beta_upper)
   
   ct_incidence_ut <- ct_incidence_ut %>%
     rbind(this_incidence)

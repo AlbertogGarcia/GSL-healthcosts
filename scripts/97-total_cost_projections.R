@@ -67,31 +67,43 @@ scenario_pal <- c(palette$bad, palette$current, palette$target, palette$avg)
 total_mortality <- read.csv("processed/total_mortality.csv", stringsAsFactors =  FALSE) %>%
   filter(endpoint == "Mortality, All-cause",
          scenario %in% relevant_scenarios)%>%
-  mutate(costs = costs_VSL*1000000)%>%
-  select(scenario, costs) %>%
+  mutate(costs = costs_VSL*1000000,
+         costs_lower = costs_VSL_lower*1000000,
+         costs_upper = costs_VSL_upper*1000000)%>%
+  select(scenario, costs, costs_lower, costs_upper) %>%
   mutate(endpoint_category = "Mortality")
 
 #### School Loss Days
 total_schoolloss <- read.csv("processed/total_schoolloss.csv", stringsAsFactors =  FALSE) %>%
-  rename(costs = costs_SLD)%>%
-  select(scenario, costs) 
+  rename(costs = costs_SLD,
+         costs_lower = costs_SLD_lower,
+         costs_upper = costs_SLD_upper)%>%
+  select(scenario, costs, costs_lower, costs_upper) 
 
 #### All morbidity
 total_morbidity <- read.csv("processed/total_morbidity.csv", stringsAsFactors =  FALSE) %>%
   group_by(scenario) %>%
-  summarise(costs = sum(costs, na.rm = T))%>%
+  summarise(costs = sum(costs, na.rm = T),
+            costs_lower = sum(costs_lower, na.rm = T),
+            costs_upper = sum(costs_upper, na.rm = T))%>%
   ungroup %>%
   rbind(total_schoolloss) %>%
   group_by(scenario) %>%
-  summarise(costs = sum(costs, na.rm = T))%>%
+  summarise(costs = sum(costs, na.rm = T),
+            costs_lower = sum(costs_lower, na.rm = T),
+            costs_upper = sum(costs_upper, na.rm = T))%>%
   ungroup %>%
   mutate(endpoint_category = "Morbidity")
 
 totals_df <- total_morbidity %>%
   rbind(total_mortality) %>%
-  mutate(costs_millions = costs / 1e6) %>%
+  mutate(costs_millions = costs / 1e6,
+         costs_millions_lower = costs_lower / 1e6,
+         costs_millions_upper = costs_upper / 1e6) %>%
   group_by(scenario) %>%
-  summarise(total_costs = sum(costs_millions), .groups = "drop")
+  summarise(total_costs = sum(costs_millions),
+            total_costs_lower = sum(costs_millions_lower),
+            total_costs_upper = sum(costs_millions_upper),.groups = "drop")
 
 total_annual_costs_plot <- total_morbidity %>%
   rbind(total_mortality) %>%
@@ -131,6 +143,44 @@ total_annual_costs_plot
 ggsave("figs/costs_mortality_vs_morbidity.png",
        width = 8, height = 6)
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Add error bars
+
+total_annual_costs_plot <- total_morbidity %>%
+  rbind(total_mortality) %>%
+  mutate(costs_millions = costs/1000000)%>%
+  ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_millions, fill = endpoint_category)
+  )+
+  geom_bar(stat='identity')+
+  geom_errorbar(
+    data = totals_df %>% filter(scenario %in% relevant_scenarios),
+    aes(x=reorder(scenario, scenario, order = T),
+        ymin = total_costs_lower,
+        ymax = total_costs_upper
+    ),
+    inherit.aes = FALSE,
+    width = 0.25,
+    linewidth = 0.5
+  ) +
+  scale_x_discrete(labels = scenario_descrip)+
+  ggtitle("Current annual dust-induced health costs") + 
+  xlab("GSL water level (ftASL)")+
+  ylab("Costs (millions USD)") +
+  scale_fill_manual(values = c(palette$blue, palette$red, palette$green))+
+  theme_cowplot(14)+
+  theme(legend.position = "top",
+        legend.justification = "center",
+        legend.title = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.title = element_text(hjust = 0.5)
+  )+
+  coord_flip()+
+  guides(fill = guide_legend(title = NULL, reverse=T, hjust = 0.5))
+total_annual_costs_plot
+ggsave("figs/costs_mortality_vs_morbidity_CI.png",
+       width = 8, height = 6)
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Separate plots by morbidity endpoint
 
@@ -139,7 +189,11 @@ total_schoolloss_endpoint <- read.csv("processed/total_schoolloss.csv", stringsA
   mutate(endpoint_subcategory = endpoint) %>%
   group_by(scenario, endpoint_subcategory) %>%
   summarise(costs = sum(costs_SLD, na.rm = T),
-            morbidity = sum(SLD, na.rm = T))%>%
+            morbidity = sum(SLD, na.rm = T),
+            costs_lower = sum(costs_SLD_lower, na.rm = T),
+            morbidity_lower = sum(SLD_lower, na.rm = T),
+            costs_upper = sum(costs_SLD_upper, na.rm = T),
+            morbidity_upper = sum(SLD_upper, na.rm = T))%>%
   ungroup
 
 # All morbidity
@@ -151,7 +205,11 @@ total_morbidity_endpoint <- read.csv("processed/total_morbidity.csv", stringsAsF
   )) %>%
   group_by(scenario, endpoint_subcategory) %>%
   summarise(costs = sum(costs, na.rm = T),
-            morbidity = sum(morbidity, na.rm = T))%>%
+            morbidity = sum(morbidity, na.rm = T),
+            costs_lower = sum(costs_lower, na.rm = T),
+            morbidity_lower = sum(morbidity_lower, na.rm = T),
+            costs_upper = sum(costs_upper, na.rm = T),
+            morbidity_upper = sum(morbidity_upper, na.rm = T))%>%
   ungroup %>%
   rbind(total_schoolloss_endpoint)
 
@@ -179,6 +237,12 @@ for(i in seq_along(endpoint_levels)){
     )
   ) +
     geom_bar(stat = "identity") +
+    geom_errorbar(
+      aes(ymin = morbidity_lower,
+          ymax = morbidity_upper),
+      width = 0.25,
+      linewidth = 0.5
+    ) +
     ggtitle(e) +
     scale_x_discrete(labels = scenario_descrip)+
     scale_y_continuous(
@@ -255,14 +319,6 @@ ggarrange(
 ggsave("figs/morbidity_costs.png",
        width = 9, height = 9)
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### Racial distribution of costs
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-total_mortality_race <- read.csv("processed/total_mortality_race.csv", stringsAsFactors =  FALSE) %>%
-  filter(scenario %in% relevant_scenarios)
-total_schoolloss_race <- read.csv("processed/total_schoolloss_race.csv", stringsAsFactors =  FALSE)
-#total_morbidity_race <- 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Projections through 2060
@@ -271,9 +327,9 @@ total_schoolloss_race <- read.csv("processed/total_schoolloss_race.csv", strings
 #### Mortality
 total_mortality_projections <- read.csv("processed/total_mortality_projections.csv", stringsAsFactors =  FALSE) %>%
   filter(scenario %in% relevant_scenarios)%>%
-  mutate(PV_costs = PV_costs_VSL,
+  rename(PV_costs = PV_costs_VSL,
          PV_cum_costs = PV_cum_costs_VSL)%>%
-  select(scenario, Year, PV_costs, PV_cum_costs) %>%
+  select(scenario, Year, PV_costs, PV_cum_costs, PV_costs_lower, PV_cum_costs_lower, PV_costs_upper, PV_cum_costs_upper) %>%
   mutate(endpoint_category = "Mortality")
 
 
@@ -281,19 +337,27 @@ total_mortality_projections <- read.csv("processed/total_mortality_projections.c
 total_schoolloss_projections <- read.csv("processed/total_schoolloss_projections.csv", stringsAsFactors =  FALSE) %>%
   rename(PV_costs = PV_costs_SLD,
          PV_cum_costs = PV_cum_costs_SLD)%>%
-  select(scenario, Year, PV_costs, PV_cum_costs) 
+  select(scenario, Year, PV_costs, PV_cum_costs, PV_costs_lower, PV_cum_costs_lower, PV_costs_upper, PV_cum_costs_upper) 
 
 
 #### Morbidity
 total_morbidity_projections <- read.csv("processed/total_morbidity_projections.csv", stringsAsFactors =  FALSE) %>%
   group_by(scenario, Year) %>%
   summarise(PV_costs = sum(PV_costs_COI, na.rm = T),
-            PV_cum_costs = sum(PV_cum_costs_COI, na.rm = T))%>%
+            PV_cum_costs = sum(PV_cum_costs_COI, na.rm = T),
+            PV_costs_lower = sum(PV_costs_lower, na.rm = T),
+            PV_cum_costs_lower = sum(PV_cum_costs_lower, na.rm = T),
+            PV_costs_upper = sum(PV_costs_upper, na.rm = T),
+            PV_cum_costs_upper = sum(PV_cum_costs_upper, na.rm = T))%>%
   ungroup %>%
   rbind(total_schoolloss_projections) %>%
   group_by(scenario, Year) %>%
   summarise(PV_costs = sum(PV_costs, na.rm = T),
-            PV_cum_costs = sum(PV_cum_costs, na.rm = T))%>%
+            PV_cum_costs = sum(PV_cum_costs, na.rm = T),
+            PV_costs_lower = sum(PV_costs_lower, na.rm = T),
+            PV_cum_costs_lower = sum(PV_cum_costs_lower, na.rm = T),
+            PV_costs_upper = sum(PV_costs_upper, na.rm = T),
+            PV_cum_costs_upper = sum(PV_cum_costs_upper, na.rm = T))%>%
   ungroup %>%
   mutate(endpoint_category = "Morbidity")
 
@@ -302,29 +366,37 @@ cum_costs_proj <- total_morbidity_projections %>%
   rbind(total_mortality_projections) %>%
   group_by(scenario, Year) %>%
   summarise(PV_costs = sum(PV_costs),
+            PV_costs_lower = sum(PV_costs_lower),
+            PV_costs_upper = sum(PV_costs_upper),
             PV_cum_costs = sum(PV_cum_costs),
-            PV_costs_billions = sum(PV_costs/1000),
-            PV_cum_costs_billions = sum(PV_cum_costs/1000))
+            PV_cum_costs_lower = sum(PV_cum_costs_lower),
+            PV_cum_costs_upper = sum(PV_cum_costs_upper))
+
 
 costs_proj <- ggplot(data = cum_costs_proj,
        aes(x = Year, y = PV_costs, color = as.character(scenario))
 )+
-  geom_line()+
-  geom_point(size = 1.5)+
-  scale_y_continuous(name = "Present Value Costs (millions USD)"
-  , breaks = seq(0, 250, 50)) +
+  geom_ribbon(aes(ymin = PV_costs_lower, ymax = PV_costs_upper, fill = as.character(scenario)), alpha = 0.12, color = NA)+
+  geom_line(linewidth = 1)+
+  geom_point(size = 2)+
+  scale_y_continuous(name = "Present Value Costs (millions USD)") +
   ggtitle("Projected changes in annual costs")+
-  scale_color_manual(values = scenario_pal,
-                     names = scenario_descrip)+
+  scale_color_manual(values = scenario_pal)+
+  scale_fill_manual(values = scenario_pal, guide="none")+
   theme_cowplot(12)+
   theme(legend.position = "none",
+        panel.grid.major = element_line(color = "gray80", size = 0.25),
         plot.title = element_text(hjust = 0.5)#, size=16)
   )
 costs_proj
-cum_costs_bar <- ggplot(data = cum_costs_proj,
-       aes(x=reorder(scenario, scenario, order = T), y=PV_costs_billions, fill = as.character(scenario))
+
+cum_costs_bar <- ggplot(data = cum_costs_proj %>% filter(Year == 2060),
+       aes(x=reorder(scenario, scenario, order = T), y=PV_cum_costs/1e3, fill = as.character(scenario))
 )+
   geom_bar(stat='identity')+
+  geom_errorbar(aes(ymin = PV_cum_costs_lower/1e3, ymax = PV_cum_costs_upper/1e3),
+                width = 0.25,
+                linewidth = 0.5)+
   ggtitle("Cumulative health costs through 2060") + 
   #xlab("GSL water level (ftASL)")+
   ylab("Present Value Costs (billions USD)") +
