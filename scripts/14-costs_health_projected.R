@@ -60,6 +60,13 @@ VSL_projected <- growth_projected %>%
   mutate(VSL_proj = VSL_2024*cum_growth_CPI*cum_growth_GDP^income_elasticity)%>%
   select(Year, VSL_proj)
 
+age_VSL_projected <- read.csv("processed/age_based_VSL_2024.csv", stringsAsFactors = F) %>%
+  select(-year) %>%
+  cross_join(growth_projected)%>%
+  mutate(age_vsl_proj = age_vsl_2024*cum_growth_CPI*cum_growth_GDP^income_elasticity) %>%
+  select(age, Year, age_vsl_proj)
+
+
 morbidity_valuations_projected <- morbidity_valuations_2024 %>%
   select(Endpoint, COI_24) %>%
   slice(rep(row_number(), each = 2060-2024+1)) %>%
@@ -70,4 +77,5 @@ morbidity_valuations_projected <- morbidity_valuations_2024 %>%
   
 
 write.csv(VSL_projected, file = "processed/VSL_projected.csv", row.names = FALSE)
+write.csv(age_VSL_projected, file = "processed/age_VSL_projected.csv", row.names = FALSE)
 write.csv(morbidity_valuations_projected, file = "processed/morbidity_valuations_projected.csv", row.names = FALSE)

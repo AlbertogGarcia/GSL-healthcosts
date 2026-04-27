@@ -135,50 +135,13 @@ total_annual_costs_plot <- total_morbidity %>%
         legend.title = element_blank(),
         axis.title.y = element_blank(),
         axis.ticks.y = element_blank(),
+        #panel.grid.major.x = element_line(color = "gray80", size = 0.25),
         plot.title = element_text(hjust = 0.5)
   )+
   coord_flip()+
   guides(fill = guide_legend(title = NULL, reverse=T, hjust = 0.5))
 total_annual_costs_plot
 ggsave("figs/costs_mortality_vs_morbidity.png",
-       width = 8, height = 6)
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-## Add error bars
-
-total_annual_costs_plot <- total_morbidity %>%
-  rbind(total_mortality) %>%
-  mutate(costs_millions = costs/1000000)%>%
-  ggplot(aes(x=reorder(scenario, scenario, order = T), y=costs_millions, fill = endpoint_category)
-  )+
-  geom_bar(stat='identity')+
-  geom_errorbar(
-    data = totals_df %>% filter(scenario %in% relevant_scenarios),
-    aes(x=reorder(scenario, scenario, order = T),
-        ymin = total_costs_lower,
-        ymax = total_costs_upper
-    ),
-    inherit.aes = FALSE,
-    width = 0.25,
-    linewidth = 0.5
-  ) +
-  scale_x_discrete(labels = scenario_descrip)+
-  ggtitle("Current annual dust-induced health costs") + 
-  xlab("GSL water level (ftASL)")+
-  ylab("Costs (millions USD)") +
-  scale_fill_manual(values = c(palette$blue, palette$red, palette$green))+
-  theme_cowplot(14)+
-  theme(legend.position = "top",
-        legend.justification = "center",
-        legend.title = element_blank(),
-        axis.title.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        plot.title = element_text(hjust = 0.5)
-  )+
-  coord_flip()+
-  guides(fill = guide_legend(title = NULL, reverse=T, hjust = 0.5))
-total_annual_costs_plot
-ggsave("figs/costs_mortality_vs_morbidity_CI.png",
        width = 8, height = 6)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -237,12 +200,12 @@ for(i in seq_along(endpoint_levels)){
     )
   ) +
     geom_bar(stat = "identity") +
-    geom_errorbar(
-      aes(ymin = morbidity_lower,
-          ymax = morbidity_upper),
-      width = 0.25,
-      linewidth = 0.5
-    ) +
+    # geom_errorbar(
+    #   aes(ymin = morbidity_lower,
+    #       ymax = morbidity_upper),
+    #   width = 0.25,
+    #   linewidth = 0.5
+    # ) +
     ggtitle(e) +
     scale_x_discrete(labels = scenario_descrip)+
     scale_y_continuous(
@@ -255,7 +218,7 @@ for(i in seq_along(endpoint_levels)){
                       labels = scenario_descrip)+
     theme_cowplot(14) +
     theme(
-      plot.margin = margin(b = 20),
+      plot.margin = margin(b = 20, r = 10),
       plot.title = element_text(hjust = 0.5, margin = margin(b = 12)),
       legend.title.position = "top",
       legend.direction = "horizontal",
@@ -317,7 +280,7 @@ ggarrange(
 )
 
 ggsave("figs/morbidity_costs.png",
-       width = 9, height = 9)
+       width = 9, height = 10)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -329,7 +292,10 @@ total_mortality_projections <- read.csv("processed/total_mortality_projections.c
   filter(scenario %in% relevant_scenarios)%>%
   rename(PV_costs = PV_costs_VSL,
          PV_cum_costs = PV_cum_costs_VSL)%>%
-  select(scenario, Year, PV_costs, PV_cum_costs, PV_costs_lower, PV_cum_costs_lower, PV_costs_upper, PV_cum_costs_upper) %>%
+  select(scenario, Year, 
+         PV_costs, PV_cum_costs, 
+         PV_costs_lower, PV_cum_costs_lower, 
+         PV_costs_upper, PV_cum_costs_upper) %>%
   mutate(endpoint_category = "Mortality")
 
 
@@ -362,7 +328,7 @@ total_morbidity_projections <- read.csv("processed/total_morbidity_projections.c
   mutate(endpoint_category = "Morbidity")
 
 
-cum_costs_proj <- total_morbidity_projections %>%
+total_costs_proj <- total_morbidity_projections %>%
   rbind(total_mortality_projections) %>%
   group_by(scenario, Year) %>%
   summarise(PV_costs = sum(PV_costs),
@@ -372,11 +338,12 @@ cum_costs_proj <- total_morbidity_projections %>%
             PV_cum_costs_lower = sum(PV_cum_costs_lower),
             PV_cum_costs_upper = sum(PV_cum_costs_upper))
 
+cum_costs_proj <- total_costs_proj %>%
+  filter(Year == 2060)
 
-costs_proj <- ggplot(data = cum_costs_proj,
+costs_proj <- ggplot(data = total_costs_proj,
        aes(x = Year, y = PV_costs, color = as.character(scenario))
 )+
-  geom_ribbon(aes(ymin = PV_costs_lower, ymax = PV_costs_upper, fill = as.character(scenario)), alpha = 0.12, color = NA)+
   geom_line(linewidth = 1)+
   geom_point(size = 2)+
   scale_y_continuous(name = "Present Value Costs (millions USD)") +
@@ -390,16 +357,13 @@ costs_proj <- ggplot(data = cum_costs_proj,
   )
 costs_proj
 
-cum_costs_bar <- ggplot(data = cum_costs_proj %>% filter(Year == 2060),
+cum_costs_bar <- ggplot(data = cum_costs_proj,
        aes(x=reorder(scenario, scenario, order = T), y=PV_cum_costs/1e3, fill = as.character(scenario))
 )+
   geom_bar(stat='identity')+
-  geom_errorbar(aes(ymin = PV_cum_costs_lower/1e3, ymax = PV_cum_costs_upper/1e3),
-                width = 0.25,
-                linewidth = 0.5)+
   ggtitle("Cumulative health costs through 2060") + 
   #xlab("GSL water level (ftASL)")+
-  ylab("Present Value Costs (billions USD)") +
+  ylab("Present Value Costs (USD billions)") +
   scale_fill_manual(values = scenario_pal,
                     name = "Lake elevation scenario",
                      labels = scenario_descrip)+
@@ -411,7 +375,8 @@ cum_costs_bar <- ggplot(data = cum_costs_proj %>% filter(Year == 2060),
     axis.title.y = element_blank(),
     axis.text.y = element_blank(),
     axis.ticks.y = element_blank(),
-    plot.title = element_text(hjust = 0.5)
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.major.x = element_line(color = "gray80", size = 0.25)
   )+
   coord_flip()+
   guides(fill = guide_legend(reverse = T, title.hjust = 0.5, hjust = 0.5))
@@ -433,6 +398,100 @@ ggarrange(p1, legend,
 
 ggsave("figs/total_costs_projected.png",
        width = 9, height = 5)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Sensitivity Analysis
+# - age-based VSL
+# - 5th and 95th pctl of conc-response function
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+# Age-based VSL mortality costs
+
+total_mortality_age_projections <- read.csv("processed/total_mortality_projections.csv", stringsAsFactors =  FALSE) %>%
+  filter(scenario %in% relevant_scenarios)%>%
+  select(scenario, Year, 
+         PV_costs_age_VSL, PV_cum_costs_age_VSL, 
+         PV_costs_age_lower, PV_cum_costs_age_lower, 
+         PV_costs_age_upper, PV_cum_costs_age_upper) %>%
+  rename(PV_costs = PV_costs_age_VSL,
+         PV_cum_costs = PV_cum_costs_age_VSL,
+         PV_costs_lower = PV_costs_age_lower,
+         PV_cum_costs_lower = PV_cum_costs_age_lower,
+         PV_costs_upper = PV_costs_age_upper,
+         PV_cum_costs_upper = PV_cum_costs_age_upper
+         )%>%
+  mutate(endpoint_category = "Mortality")
+
+cum_costs_age_proj <- total_morbidity_projections %>%
+  rbind(total_mortality_age_projections) %>%
+  group_by(scenario, Year) %>%
+  summarise(PV_cum_costs = sum(PV_cum_costs),
+            PV_cum_costs_lower = sum(PV_cum_costs_lower),
+            PV_cum_costs_upper = sum(PV_cum_costs_upper)) %>%
+  filter(Year == 2060) %>%
+  pivot_longer(cols = c("PV_cum_costs", "PV_cum_costs_lower", "PV_cum_costs_upper"),
+               names_to = "conc_response", values_to = "PV_cum_costs")%>%
+  mutate(sensitivity = case_when(
+    conc_response == "PV_cum_costs" ~ "Age-adjusted~VSL",
+    conc_response == "PV_cum_costs_lower" ~ "Age-adjusted~VSL~'|'~Conc-response~5^th~pctl.",
+    conc_response == "PV_cum_costs_upper" ~ "Age-adjusted~VSL~'|'~Conc-response~95^th~pctl."
+  )) %>%
+  select(PV_cum_costs, sensitivity, scenario)
+
+cum_costs_sensitivity <- cum_costs_proj %>%
+    pivot_longer(cols = c("PV_cum_costs", "PV_cum_costs_lower", "PV_cum_costs_upper"),
+                 names_to = "conc_response", values_to = "PV_cum_costs")%>%
+  mutate(sensitivity = case_when(
+    conc_response == "PV_cum_costs" ~ "Preferred~VSL",
+    # stack into two lines with atop(line1, line2)
+    conc_response == "PV_cum_costs_lower" ~ "atop(Preferred~VSL~'&', ~Conc-response~5^th~pctl.)",
+    conc_response == "PV_cum_costs_upper" ~ "atop(Preferred~VSL~'&', ~Conc-response~95^th~pctl.)"
+  )) %>%
+    select(PV_cum_costs, sensitivity, scenario) %>%
+    rbind(cum_costs_age_proj) %>%
+    mutate(PV_cum_costs = PV_cum_costs/1e3) # get in USD billions
+
+plot_order <- c(
+  "Age-adjusted~VSL",
+  "atop(Preferred~VSL~'&', ~Conc-response~5^th~pctl.)",
+  "atop(Preferred~VSL~'&', ~Conc-response~95^th~pctl.)",
+  "Preferred~VSL"
+)
+
+cum_costs_sensitivity %>%
+  filter(sensitivity %ni% c("Age-adjusted~VSL~'|'~Conc-response~5^th~pctl.","Age-adjusted~VSL~'|'~Conc-response~95^th~pctl.")) %>%
+  mutate(sensitivity = factor(sensitivity, levels = plot_order)) %>%
+  ggplot(aes(x= sensitivity, 
+           y = PV_cum_costs, 
+           fill = as.character(scenario)
+           )) +
+  geom_bar(stat='identity', position="dodge")+
+  ggtitle("Sensitivity of cumulative cost estimates\nto alternate parameterizations") + 
+  ylab("Present Value Costs (USD billions)") +
+  scale_fill_manual(values = scenario_pal,
+                    name = "Lake elevation scenario",
+                    labels = scenario_descrip)+
+  theme_cowplot(12)+
+  theme(legend.title.position = "top",
+        legend.direction = "horizontal",
+        legend.box.just = "center",  
+        legend.justification = "center", 
+        legend.position = "bottom",
+        axis.title.y = element_blank(),
+        #axis.text.y = element_blank(),
+        #axis.ticks.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        panel.grid.major.x = element_line(color = "gray80", size = 0.25),
+        panel.grid.minor.x = element_line(color = "gray80", size = 0.1)
+  )+
+  scale_x_discrete(drop = FALSE, labels = function(x) parse(text = x))+
+  coord_flip()+
+  guides(fill = guide_legend(reverse = T, title.hjust = 0.5, hjust = 0.5))
+
+ggsave("figs/PV_costs_sensitivity.png",
+       width = 8, height = 6)
+
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Racial disparities in costs per capita
@@ -572,9 +631,9 @@ cost_plot_current <- total_costs_race %>%
     x = reorder(Race, -costs_per_capita),
     y = costs_per_capita
   )) +
-  geom_point(size = 5, color = palette$dark) +
+  geom_point(size = 5, color = palette$blue) +
   scale_y_continuous(
-    name = "Per-capita health costs",
+    name = "Annual per-capita health costs",
     labels = label_dollar()
   ) +
   scale_x_discrete(name = NULL) +
@@ -597,9 +656,9 @@ pm_plot_current <- total_costs_race %>%
     x = reorder(Race, -costs_per_capita),
     y = pm_delta
   )) +
-  geom_point(size = 5, color = palette$dark) +
+  geom_point(size = 5, color = palette$blue) +
   scale_y_continuous(
-    name = "Avg. PM exposure per dust storm"
+    name = expression(paste("Pop. weighted PM10 exposure per storm (", mu, "g/m"^3, ")"))
   ) +
   scale_x_discrete(name = NULL) +
   ggtitle("Dust exposure by race") +

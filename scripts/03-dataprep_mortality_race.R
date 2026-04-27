@@ -24,6 +24,20 @@ options(dplyr.summarise.inform = FALSE)  # turn off dplyr group by comments
 options(java.parameters = "-Xmx8000m") 
 `%ni%` <- Negate(`%in%`)  # "not in" function
 
+# Color palette
+palette <- list("white" = "#FAFAFA",
+                "dark" = "#0c2230",
+                "red" = "#d7191c",
+                "blue" = "#2c7bb6",
+                "orange" = "#fc8d62",
+                "green" = "#66c2a5",
+                "purple" = "#8da0cb",
+                "bad" = "#d7191c",
+                "current" = "#fdae61",
+                "target" = "#abd9e9",
+                "avg" = "#2c7bb6"
+)
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### MORTALITY
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -67,11 +81,63 @@ ct_ACS_agebyrace <- ct_ACS_agebyrace_wide %>%
 
 # get county by age population totals
 county_agebyrace_pop_ACS <- ct_ACS_agebyrace %>%
-  group_by(County, lower_age, upper_age, race)%>%
+  group_by(County, lower_age, upper_age, age_group, race)%>%
   summarise(pop = sum(pop, na.rm = T))%>%
   ungroup
 
-# Get county level incidence data
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Plot SL county age distributions
+map_A <- c(
+  "American Indian and Alaska Native Alone" = "American Indian",
+  "Asian alone" = "Asian",
+  "Black or African American Alone" = "Black/African American",
+  "Hawaiian and PI Alone" = "Pacific Islander",
+  "Hispanic or Latino" = "Hispanic/Latino",
+  "White NH" = "White",
+  "Multi Racial" = "Multiracial",
+  "Other Race Alone" = "Other"
+)
+
+ct_ACS_agebyrace %>%
+  filter(County %in% c("Salt Lake", 
+                       "Weber", 
+                       "Davis" 
+                     #  "Utah" ,
+                      # "Box Elder"
+                       )) %>%
+  group_by(County, lower_age, upper_age, age_group, race) %>%
+  summarise(pop = sum(pop, na.rm = T)) %>%
+  ungroup %>%
+  group_by(race) %>%
+  mutate(prop_age = pop/sum(pop, na.rm = T),
+         race_std = recode(race, !!!map_A),
+        age_group = ifelse(age_group == "85 and over", "85+", age_group)) %>%
+  ungroup %>%
+  filter(race_std %in% c("Pacific Islander", "Hispanic/Latino" , "White"
+                    # "Asian",
+                     #"Black/African American"
+                    )) %>%
+ggplot(aes(x = reorder(age_group, lower_age), y = prop_age, fill = race_std))+
+  geom_bar(stat = 'identity', position="dodge")+
+  scale_fill_manual(values = c(palette$orange, 
+                                palette$red, 
+                                palette$blue 
+                               # palette$green, 
+                              #  palette$dark
+                               )
+  )+
+  xlab("Age group")+ylab("Proportion of population")+
+  ggtitle("Age distributions across racial groups")+
+  theme_cowplot()+
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        legend.title = element_blank(),
+        legend.position = "top",
+        legend.justification = "center")
+ggsave("figs/race_ages.png", width = 9, height = 6.5)
+
+
+# geom_histogram()# Get county level incidence data
 county_incidence_agebyrace <- read.delim("data/health/mortality/CDC_wonder/2018to23/county_race_age10yr.txt") %>%
   mutate(age_group = ifelse(Ten.Year.Age.Groups %in% c("< 1 year", "1-4 years"), "Under 5 years", Ten.Year.Age.Groups))%>%
   filter(age_group != "NS", Notes != "Total")%>% drop_na(County.Code) %>%

@@ -67,11 +67,23 @@ ct_incidence_projections <- read.csv("processed/ct_incidence_projections_adj.csv
 
 #3 Projected VSL
 VSL_projected <- read.csv("processed/VSL_projected.csv", stringsAsFactors =  FALSE)
+age_VSL_projected <- read.csv("processed/age_VSL_projected.csv", stringsAsFactors =  FALSE)
+
+age_VSL_projected_grouped <- ct_incidence_projections %>%
+  select(lower_age, upper_age, age_group) %>%
+  distinct()%>%
+  tidyr::crossing(age_VSL_projected)%>%
+  filter(age >= lower_age & age <= upper_age)%>%
+  group_by(lower_age, upper_age, age_group, Year) %>%
+  summarise(age_vsl_proj = mean(age_vsl_proj))
+
+
 
 #Merge w/ pollution deltas 
 ct_projections <- ct_incidence_projections %>%
   left_join(scenario_pm_deltas, by = "FIPS", relationship = "many-to-many")%>%
   left_join(VSL_projected, by = "Year") %>%
+  left_join(age_VSL_projected_grouped, by = c("Year", "lower_age", "upper_age", "age_group")) %>%
   filter(Year >= 2025)
 
 
@@ -121,9 +133,13 @@ ct_mortality_projections <- ct_mortality_projections_temp %>%
          pm_delta = relative_pm_delta + current_pm_delta,
          PV_costs_VSL = (mortality*VSL_proj)/(1+0.03)^(Year - 2024),
          PV_costs_lower = (mortality_lower*VSL_proj)/(1+0.03)^(Year - 2024),
-         PV_costs_upper = (mortality_upper*VSL_proj)/(1+0.03)^(Year - 2024)
+         PV_costs_upper = (mortality_upper*VSL_proj)/(1+0.03)^(Year - 2024),
+         PV_costs_age_VSL = (mortality*age_vsl_proj)/(1+0.03)^(Year - 2024),
+         PV_costs_age_lower = (mortality_lower*age_vsl_proj)/(1+0.03)^(Year - 2024),
+         PV_costs_age_upper = (mortality_upper*age_vsl_proj)/(1+0.03)^(Year - 2024)
          ) %>%
-  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, mortality, mortality_lower, mortality_upper, PV_costs_VSL, PV_costs_lower, PV_costs_upper)
+  select(FIPS, County, scenario, event, Year, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, 
+         mortality, mortality_lower, mortality_upper, PV_costs_VSL, PV_costs_lower, PV_costs_upper, PV_costs_age_VSL, PV_costs_age_lower, PV_costs_age_upper)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -133,19 +149,26 @@ ct_mortality_projections <- ct_mortality_projections_temp %>%
 total_mortality_projections <- ct_mortality_projections %>%
   group_by(scenario, Year) %>%
   summarise(mortality = sum(mortality, na.rm = T),
-            PV_costs_VSL = sum(PV_costs_VSL, na.rm = T),
             mortality_lower = sum(mortality_lower, na.rm = T),
-            PV_costs_lower = sum(PV_costs_lower, na.rm = T),
             mortality_upper = sum(mortality_upper, na.rm = T),
-            PV_costs_upper = sum(PV_costs_upper, na.rm = T))%>%
+            PV_costs_VSL = sum(PV_costs_VSL, na.rm = T),
+            PV_costs_lower = sum(PV_costs_lower, na.rm = T),
+            PV_costs_upper = sum(PV_costs_upper, na.rm = T),
+            PV_costs_age_VSL = sum(PV_costs_age_VSL, na.rm = T),
+            PV_costs_age_lower = sum(PV_costs_age_lower, na.rm = T),
+            PV_costs_age_upper = sum(PV_costs_age_upper, na.rm = T))%>%
   ungroup %>%
   group_by(scenario) %>%
-  mutate(PV_cum_costs_VSL = cumsum(PV_costs_VSL),
-         cum_mortality = cumsum(mortality),
-         PV_cum_costs_lower = cumsum(PV_costs_lower),
+  mutate(cum_mortality = cumsum(mortality),
          cum_mortality_lower = cumsum(mortality_lower),
+         cum_mortality_upper = cumsum(mortality_upper),
+         PV_cum_costs_VSL = cumsum(PV_costs_VSL),
+         PV_cum_costs_lower = cumsum(PV_costs_lower),
          PV_cum_costs_upper = cumsum(PV_costs_upper),
-         cum_mortality_upper = cumsum(mortality_upper))%>%
+         PV_cum_costs_age_VSL = cumsum(PV_costs_age_VSL),
+         PV_cum_costs_age_lower = cumsum(PV_costs_age_lower),
+         PV_cum_costs_age_upper = cumsum(PV_costs_age_upper)
+         )%>%
   ungroup
   
 write.csv(total_mortality_projections, file = "processed/total_mortality_projections.csv", row.names = FALSE)
@@ -154,7 +177,6 @@ write.csv(total_mortality_projections, file = "processed/total_mortality_project
 
 mortality_proj_annual <- total_mortality_projections %>%
   ggplot(aes(x = Year, y = mortality, color = as.character(scenario)))+
-  geom_ribbon(aes(ymin = mortality_lower, ymax = mortality_upper, fill = as.character(scenario)), inherit.aes = TRUE, alpha = 0.12, color = NA)+
   geom_line(linewidth = 1)+
   geom_point(size = 2)+
   scale_y_continuous(name = "Annual mortality") +
@@ -167,46 +189,3 @@ mortality_proj_annual <- total_mortality_projections %>%
         plot.title = element_text(hjust = 0.5, size=16)
   )
 mortality_proj_annual
-
-#ggsave("figs/mortality_projections_annual.png", width = 6, height = 5)
-
-
-# mortality_proj <- total_mortality_projections %>%
-#   ggplot(aes(x = Year, y = cum_mortality, color = as.character(scenario)))+
-#   geom_ribbon(aes(ymin = cum_mortality_lower, ymax = cum_mortality_upper), inherit.aes = TRUE, alpha = 0.1)+
-#   geom_line()+
-#   geom_point(size = 1.5)+
-#   scale_y_continuous(name = "Cumulative premature mortality"
-#                      # , limits = c(0, 175),
-#                      # breaks = seq(0, 200, by = 25)
-#                      ) +
-#   ggtitle("Projected dust-induced mortality (2025-2060)")+
-#   scale_color_manual(name = "GSL water level (ftASL)", values = scenario_pal)+
-#   theme_cowplot(16)+
-#   theme(legend.position = "bottom",
-#         plot.title = element_text(hjust = 0.5)#, size=16)
-#   )
-# mortality_proj
-# 
-# 
-# 
-# costs_proj <- total_mortality_projections %>%
-#   ggplot(aes(x = Year, y = PV_cum_costs_VSL/1e9, color = as.character(scenario)))+
-#   geom_ribbon(aes(ymin = PV_cum_costs_lower/1e9, ymax = PV_cum_costs_upper/1e9, fill = as.character(scenario)), inherit.aes = TRUE, alpha = 0.2, color = NA)+
-#   geom_line()+
-#   geom_point(size = 1.5)+
-#   scale_y_continuous(name = "Cumulative mortality costs (billions USD)"
-#                      ) +
-#   ggtitle("Present value of projected costs (2025-2060)")+
-#   scale_color_manual(name = "GSL water level (ftASL)", values = scenario_pal)+
-#   scale_fill_manual(values = scenario_pal)+
-#   theme_cowplot(16)+
-#   theme(legend.position = "bottom",
-#         plot.title = element_text(hjust = 0.5)#, size=16)
-#         )
-# costs_proj
-# ggarrange(mortality_proj, costs_proj,
-#           ncol = 1, nrow = 2,
-#           labels = c("A", "B"),
-#           legend = "bottom", common.legend = T)
-

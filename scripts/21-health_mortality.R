@@ -184,8 +184,11 @@ ct_mortality_age <- ct_mortality_age_temp %>%
          costs_VSL = mortality*VSL_24,
          costs_VSL_lower = mortality_lower*VSL_24,
          costs_VSL_upper = mortality_upper*VSL_24,
-         costs_age_VSL = mortality*age_vsl_2024) %>%
-  select(FIPS, County, scenario, event, event_days, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, mortality, mortality_lower, mortality_upper, costs_age_VSL, costs_VSL, costs_VSL_lower, costs_VSL_upper)
+         costs_age_VSL = mortality*age_vsl_2024,
+         costs_age_lower = mortality_lower*age_vsl_2024,
+         costs_age_upper = mortality_upper*age_vsl_2024) %>%
+  select(FIPS, County, scenario, event, event_days, age_group, lower_age, upper_age, incidence_rate, pop, pm_delta, endpoint, 
+         mortality, mortality_lower, mortality_upper, costs_age_VSL, costs_age_lower, costs_age_upper, costs_VSL, costs_VSL_lower, costs_VSL_upper)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Create data for analyses
@@ -205,6 +208,12 @@ ct_mortality <- ct_mortality_age %>%
 
 write.csv(ct_mortality, file = "processed/ct_mortality.csv", row.names = FALSE)
 
+county_mortality_4192 <- ct_mortality_age %>%
+  group_by(County, scenario, endpoint) %>%
+  summarise(mortality = sum(mortality, na.rm = T))%>%
+  ungroup %>%
+  filter(scenario == 4192)
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Total overall mortality
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -216,7 +225,9 @@ total_mortality <- ct_mortality_age %>%
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_VSL_lower = sum(costs_VSL_lower, na.rm = T),
             costs_VSL_upper = sum(costs_VSL_upper, na.rm = T),
-            costs_age_VSL = sum(costs_age_VSL, na.rm = T)
+            costs_age_VSL = sum(costs_age_VSL, na.rm = T),
+            costs_age_lower = sum(costs_age_lower, na.rm = T),
+            costs_age_upper = sum(costs_age_upper, na.rm = T)
   )%>%
   ungroup
 
@@ -263,46 +274,6 @@ mortality_costs_plot <- mortality_plot_prep %>%
   guides(fill = guide_legend(title = NULL, reverse=T, hjust = 0.5))
 mortality_costs_plot
 ggsave("figs/mortality_costs.png", width = 9, height = 7)
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-## Add error bars
-
-mortality_costs_CI <- mortality_plot_prep %>%
-  ggplot(aes(x=reorder(scenario, scenario, order = T), y=mortality, fill = reorder(endpoint, - mortality))
-  )+
-  geom_bar(stat='identity')+
-  geom_errorbar(
-    data = total_mortality %>% filter(endpoint == "Mortality, All-cause", scenario %in% relevant_scenarios),
-    aes(x=reorder(scenario, scenario, order = T),
-        ymin = mortality_lower,
-        ymax = mortality_upper
-    ),
-    inherit.aes = FALSE,
-    width = 0.25,
-    linewidth = 0.5
-  ) +
-  scale_x_discrete(labels = scenario_descrip)+
-  scale_y_continuous(
-    "Premature mortalities",
-    sec.axis = sec_axis(~ . * VSL_24, 
-                        name = "Costs (millions USD)",
-                        breaks = seq(0, 80, 20)
-    )
-  )+
-  ggtitle("Current annual dust-induced mortality costs") + 
-  scale_fill_manual(values = c(palette$blue, palette$red, palette$green))+
-  theme_cowplot(16)+
-  theme(legend.position = "top",
-        legend.justification = "center",
-        legend.title = element_blank(),
-        axis.title.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        plot.title = element_text(hjust = 0.5)
-  )+
-  coord_flip()+
-  guides(fill = guide_legend(title = NULL, reverse=T, hjust = 0.5))
-mortality_costs_CI
-ggsave("figs/mortality_costs_CI.png", width = 9, height = 7)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -439,7 +410,7 @@ total_mortality_race <- ct_mortality_agebyrace %>%
   group_by(scenario, race) %>%
   summarise(mortality = sum(mortality, na.rm = T),
             population = sum(pop, na.rm = T)/length(unique(event)),
-            pm_delta = weighted.mean(pm_delta, event_days, na.rm = T),
+            pm_delta = weighted.mean(pm_delta, pop, na.rm = T),
             costs_VSL = sum(costs_VSL, na.rm = T),
             costs_age_VSL = sum(costs_age_VSL, na.rm = T)
             )%>%
@@ -490,7 +461,6 @@ ct_mortality_map <- ct_mortality_agebyrace %>%
             mortality = sum(mortality, na.rm = T),
             population = sum(pop, na.rm = T)/length(unique(event)),
             costs_VSL = sum(costs_VSL, na.rm = T),
-            costs_age_VSL = sum(costs_age_VSL, na.rm = T),
             ct_incidence_rate_annual = weighted.mean(incidence_rate,pop)
   )%>%
   ungroup

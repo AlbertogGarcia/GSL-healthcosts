@@ -30,7 +30,7 @@ options(java.parameters = "-Xmx8000m")
 #### Load and organize data
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 current_scenario = 4192
-map_baseline = 4206
+map_baseline = 4203
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Get relevant GSL lake elevation polygons
@@ -163,8 +163,8 @@ pm_map <- tm_shape(e_bg) + tm_fill("#f5f9f9")+
           pal = "YlOrRd",
           alpha = 0.85,
           lwd = 0.12,
-          breaks = c(0, 50, 150),
-          labels = c(0, 50, "150 or more")
+          breaks = c(0, 50, 200),
+          labels = c(0, 50, "200 or more")
   )+
   tm_shape(GSL_rcl) + tm_fill("elevation",
                               title = "GSL elevation",

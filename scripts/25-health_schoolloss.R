@@ -202,7 +202,7 @@ total_schoolloss <- ct_schoolloss %>%
             costs_SLD = sum(SLD*SLD_24, na.rm = T),
             costs_SLD_lower = sum(SLD_lower*SLD_24, na.rm = T),
             costs_SLD_upper = sum(SLD_upper*SLD_24, na.rm = T),
-            pop = sum(pop, na.rm = T)
+            pop = sum(pop, na.rm = T)/length(unique(event))
   )%>%
   ungroup %>%
   mutate(delta_rate = SLD/pop)

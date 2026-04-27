@@ -91,7 +91,7 @@ age_vsl_2024 %>%
   scale_color_manual(labels = c("Cohort-adjusted\n(Aldy & Viscusi 2008)", "EPA-recommended"),
                      values = c(palette$blue, palette$red)
                      )+
-  labs(x= "Age", y = "VSL (millions 2024 USD)")
+  labs(x= "Age", y = "VSL (2024 USD millions)")
 
 ggsave(filename = "VSL_comparison.png", path = "figs", 
        height = 5, width = 6)
